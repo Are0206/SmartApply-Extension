@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Formulario de Prueba - SmartApply</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: #f1f5f9; color: #1e293b; padding: 40px 20px; }
+    .container { max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 22px; margin-bottom: 6px; }
+    .sub { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+    .card { background: white; border-radius: 10px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); margin-bottom: 16px; }
+    .card h2 { font-size: 16px; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid #e2e8f0; }
+    .row { display: flex; gap: 12px; }
+    .row .group { flex: 1; }
+    .group { margin-bottom: 12px; }
+    label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 4px; }
+    input, textarea { width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+    input:focus, textarea:focus { outline: none; border-color: #38bdf8; }
+    textarea { resize: vertical; min-height: 70px; }
+    .btns { display: flex; gap: 10px; margin-top: 20px; }
+    .btn { padding: 8px 20px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .btn:hover { opacity: 0.9; }
+    .btn-auto { background: #38bdf8; color: #0f172a; }
+    .btn-prev { background: transparent; color: #38bdf8; border: 1px solid #38bdf8; }
+    .btn-sub { background: #1e293b; color: white; }
+    .btn-clear { background: #e2e8f0; color: #475569; }
+    #result { margin-top: 16px; padding: 12px; background: #0f172a; color: #38bdf8; border-radius: 6px; font-family: monospace; font-size: 11px; white-space: pre-wrap; display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Solicitud de Empleo - TechCorp</h1>
+    <p class="sub">Sitio de pruebas para demostrar SmartApply. Usa los botones o la extension.</p>
+
+    <div class="btns" style="margin-bottom:16px">
+      <button class="btn btn-prev" onclick="preview()">Previsualizar</button>
+      <button class="btn btn-auto" onclick="autofill()">Autocompletar</button>
+      <button class="btn btn-clear" onclick="clearAll()">Limpiar</button>
+    </div>
+
+    <form id="form" onsubmit="submit(event)">
+      <div class="card">
+        <h2>Datos Personales</h2>
+        <div class="row">
+          <div class="group"><label>Nombre</label><input name="nombre" placeholder="Tu nombre"></div>
+          <div class="group"><label>Apellido</label><input name="apellido" placeholder="Tu apellido"></div>
+        </div>
+        <div class="group"><label>Email</label><input type="email" name="email" placeholder="tu@email.com"></div>
+        <div class="row">
+          <div class="group"><label>Telefono</label><input type="tel" name="telefono" placeholder="+506 0000-0000"></div>
+          <div class="group"><label>Ubicacion</label><input name="ubicacion" placeholder="Ciudad, Pais"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Perfil Profesional</h2>
+        <div class="group"><label>Titulo / Cargo</label><input name="titulo" placeholder="Ej: Ingeniero de Software"></div>
+        <div class="row">
+          <div class="group"><label>LinkedIn</label><input name="linkedin" placeholder="linkedin.com/in/..."></div>
+          <div class="group"><label>Portfolio</label><input name="portfolio" placeholder="tu-sitio.com"></div>
+        </div>
+        <div class="group"><label>Habilidades</label><input name="habilidades" placeholder="JavaScript, Python..."></div>
+      </div>
+
+      <div class="card">
+        <h2>Carta de Presentacion</h2>
+        <div class="group"><label>Resumen</label><textarea name="resumen" placeholder="Cuentanos sobre ti..."></textarea></div>
+      </div>
+
+      <div class="btns">
+        <button type="submit" class="btn btn-sub">Enviar Solicitud</button>
+      </div>
+    </form>
+
+    <div id="result"></div>
+  </div>
+
+  <script>
+    // Cambiar a localhost:5000 si usas el backend Python
+    const API = "http://localhost:3000";
+
+    async function fetchProfile() {
+      const res = await fetch(`${API}/api/profile`);
+      return (await res.json()).data;
+    }
+
+    function mapFields(p) {
+      return {
+        nombre: p.nombre, apellido: p.apellido, email: p.email,
+        telefono: p.telefono, ubicacion: p.ubicacion,
+        titulo: p.titulo_profesional, linkedin: p.linkedin,
+        portfolio: p.portfolio, habilidades: (p.habilidades || []).join(", "),
+        resumen: p.resumen,
+      };
+    }
+
+    async function preview() {
+      try {
+        const mapped = mapFields(await fetchProfile());
+        Object.entries(mapped).forEach(([name, val]) => {
+          const el = document.querySelector(`[name="${name}"]`);
+          if (el) { el.style.outline = "2px dashed #38bdf8"; el.placeholder = val; el.title = `SmartApply: ${val}`; }
+        });
+        show("PREVISUALIZACION\n" + JSON.stringify(mapped, null, 2));
+      } catch (e) { show("Error: " + e.message); }
+    }
+
+    async function autofill() {
+      try {
+        const mapped = mapFields(await fetchProfile());
+        Object.entries(mapped).forEach(([name, val]) => {
+          const el = document.querySelector(`[name="${name}"]`);
+          if (el) {
+            el.value = val;
+            el.style.outline = "2px solid #38bdf8";
+            setTimeout(() => { el.style.outline = ""; }, 2000);
+          }
+        });
+        show("AUTOCOMPLETADO\n" + JSON.stringify(mapped, null, 2));
+      } catch (e) { show("Error: " + e.message); }
+    }
+
+    function clearAll() {
+      document.getElementById("form").reset();
+      document.querySelectorAll("#form input, #form textarea").forEach(el => { el.style.outline = ""; el.title = ""; });
+      document.getElementById("result").style.display = "none";
+    }
+
+    function submit(e) {
+      e.preventDefault();
+      const data = Object.fromEntries(new FormData(e.target).entries());
+      show("ENVIADO\n" + JSON.stringify(data, null, 2));
+    }
+
+    function show(txt) {
+      const el = document.getElementById("result");
+      el.textContent = txt;
+      el.style.display = "block";
+    }
+  </script>
+</body>
+</html>

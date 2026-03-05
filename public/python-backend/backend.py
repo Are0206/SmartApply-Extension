@@ -1,12 +1,4 @@
-"""
-SmartApply - Backend Python (Flask)
-POC: Extension de navegador para autocompletar formularios
 
-Ejecutar:
-  pip install flask flask-cors
-  python backend.py
-  -> http://localhost:5000
-"""
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS

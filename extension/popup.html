@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartApply</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      width: 280px;
+      background: #f5f6fa;
+      color: #2d3436;
+    }
+
+    header {
+      background: #6c5ce7;
+      color: white;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+    }
+
+    .content {
+      padding: 20px;
+    }
+
+    .toggle-section {
+      background: white;
+      border-radius: 10px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    .toggle-label {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .toggle-label span {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .toggle-label small {
+      font-size: 11px;
+      color: #636e72;
+    }
+
+    /* Toggle switch */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 48px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #b2bec3;
+      transition: 0.3s;
+      border-radius: 26px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: '';
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.3s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #6c5ce7;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+    }
+
+    .status-badge {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .status-badge.enabled {
+      background: #dfe6fd;
+      color: #4834d4;
+    }
+
+    .status-badge.disabled {
+      background: #f0f0f0;
+      color: #636e72;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .status-badge.enabled .status-dot {
+      background: #6c5ce7;
+    }
+
+    .status-badge.disabled .status-dot {
+      background: #b2bec3;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SmartApply</h1>
+  </header>
+
+  <div class="content">
+    <div class="toggle-section">
+      <div class="toggle-label">
+        <span>Autocompletado</span>
+        <small>Activar o desactivar la extensión</small>
+      </div>
+      <label class="switch" aria-label="Activar o desactivar autocompletado">
+        <input type="checkbox" id="toggleEnabled" />
+        <span class="slider"></span>
+      </label>
+    </div>
+
+    <div class="status-badge" id="statusBadge">
+      <span class="status-dot"></span>
+      <span id="statusText"></span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

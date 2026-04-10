@@ -1,7 +1,84 @@
 // SmartApply Extension - popup.js
 const API = () => document.getElementById("apiUrl").value || "http://localhost:3000";
 
-document.addEventListener("DOMContentLoaded", loadProfile);
+let currentMatched = {};
+function detectFields() {
+  const inputs = document.querySelectorAll('input, textarea, select');
+  const fields = [];
+  inputs.forEach(el => {
+    let fieldName = el.name || el.id || '';
+    if (!fieldName) {
+      // Buscar label asociado
+      const label = document.querySelector(`label[for="${el.id}"]`);
+      if (label) {
+        fieldName = label.textContent.toLowerCase().trim();
+      } else if (el.placeholder) {
+        fieldName = el.placeholder.toLowerCase().trim();
+      }
+    }
+    if (fieldName) {
+      fields.push({
+        name: fieldName,
+        selector: el.name ? `[name="${el.name}"]` : el.id ? `#${el.id}` : null,
+        type: el.type || el.tagName.toLowerCase()
+      });
+    }
+  });
+  return fields;
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  loadProfile();
+  setupEventListeners();
+  loadToggleState();
+});
+
+function setupEventListeners() {
+  document.getElementById("previewBtn").addEventListener("click", handlePreview);
+  document.getElementById("autofillBtn").addEventListener("click", handleAutofill);
+  document.getElementById("confirmFillBtn").addEventListener("click", confirmAndFill);
+  document.getElementById("cancelConfirmBtn").addEventListener("click", cancelConfirm);
+  document.getElementById("toggleSwitch").addEventListener("click", handleToggle);
+}
+
+// ==================== TOGGLE STATE ====================
+
+async function loadToggleState() {
+  try {
+    const result = await chrome.storage.local.get("autofillEnabled");
+    const enabled = result.autofillEnabled !== false; // Default to true
+    setToggleState(enabled);
+  } catch (err) {
+    console.error("Error loading toggle state:", err);
+    setToggleState(true); // Default to enabled
+  }
+}
+
+function setToggleState(enabled) {
+  const toggle = document.getElementById("toggleSwitch");
+  if (enabled) {
+    toggle.classList.add("on");
+  } else {
+    toggle.classList.remove("on");
+  }
+}
+
+async function handleToggle() {
+  try {
+    const result = await chrome.storage.local.get("autofillEnabled");
+    const currentState = result.autofillEnabled !== false;
+    const newState = !currentState;
+    
+    await chrome.storage.local.set({ autofillEnabled: newState });
+    setToggleState(newState);
+    
+    const status = newState ? "Autocompletado activado" : "Autocompletado desactivado";
+    addLog(status);
+  } catch (err) {
+    addLog("Error: No se pudo cambiar el estado");
+    console.error("Error handling toggle:", err);
+  }
+}
 
 async function loadProfile() {
   try {
@@ -27,65 +104,114 @@ async function loadProfile() {
 
 async function handlePreview() {
   try {
+    addLog("Preview iniciado");
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return addLog("No hay pestana activa");
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => Array.from(document.querySelectorAll('input[name], textarea[name]')).map(e => e.name),
-    });
-    const fields = results[0]?.result || [];
+    if (!tab?.id) return addLog("No hay pestaña activa");
+    const result = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
+    const fields = result?.fields || [];
     const res = await fetch(`${API()}/api/profile`);
     const profile = (await res.json()).data;
     const mapping = buildMapping(profile);
     const matched = {};
-    fields.forEach(f => { if (mapping[f]) matched[f] = mapping[f]; });
-
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: (data) => {
-        Object.entries(data).forEach(([name, val]) => {
-          const el = document.querySelector(`[name="${name}"]`);
-          if (el) { el.style.outline = "2px dashed #38bdf8"; el.title = `SmartApply: ${val}`; }
-        });
-      },
-      args: [matched],
+    fields.forEach(f => {
+      if (mapping[f.name]) matched[f.name] = mapping[f.name];
     });
+
+    await chrome.tabs.sendMessage(tab.id, { action: "preview", data: matched });
     addLog(`Preview: ${Object.keys(matched).length} campos`);
-  } catch (err) { addLog("Error: " + err.message); }
+  } catch (err) {
+    addLog("Error: " + err.message);
+  }
 }
 
 async function handleAutofill() {
   try {
+    // Verificar si autocompletado está habilitado
+    const result = await chrome.storage.local.get("autofillEnabled");
+    const enabled = result.autofillEnabled !== false;
+    
+    if (!enabled) {
+      addLog("Autocompletado está desactivado. Actívalo para continuar.");
+      document.getElementById("statusTxt").textContent = "Autocompletado desactivado";
+      return;
+    }
+    
+    addLog("Autocompletar iniciado");
+    document.getElementById("statusTxt").textContent = "Autocompletando...";
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return addLog("No hay pestana activa");
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => Array.from(document.querySelectorAll('input[name], textarea[name]')).map(e => e.name),
-    });
-    const fields = results[0]?.result || [];
+    if (!tab?.id) return addLog("No hay pestaña activa");
+    const result2 = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
+    const fields = result2?.fields || [];
+    if (!fields.length) {
+      addLog("No se encontraron campos en la página.");
+      document.getElementById("statusTxt").textContent = "No se encontraron campos";
+      return;
+    }
     const res = await fetch(`${API()}/api/profile`);
     const profile = (await res.json()).data;
     const mapping = buildMapping(profile);
     const matched = {};
-    fields.forEach(f => { if (mapping[f]) matched[f] = mapping[f]; });
-
-    await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: (data) => {
-        Object.entries(data).forEach(([name, val]) => {
-          const el = document.querySelector(`[name="${name}"]`);
-          if (el) {
-            el.value = val;
-            el.style.outline = "2px solid #38bdf8";
-            el.dispatchEvent(new Event("input", { bubbles: true }));
-            setTimeout(() => { el.style.outline = ""; }, 2000);
-          }
-        });
-      },
-      args: [matched],
+    fields.forEach(f => {
+      if (mapping[f.name]) matched[f.name] = mapping[f.name];
     });
-    addLog(`Autocompletado: ${Object.keys(matched).length} campos`);
-  } catch (err) { addLog("Error: " + err.message); }
+
+    currentMatched = matched;
+    if (!Object.keys(matched).length) {
+      addLog("No se detectaron coincidencias entre campos y perfil.");
+      document.getElementById("statusTxt").textContent = "No se encontraron coincidencias";
+      return;
+    }
+    showConfirmation(matched);
+    document.getElementById("statusTxt").textContent = "Datos listos para confirmar";
+    addLog(`Campos detectados: ${Object.keys(matched).length}`);
+  } catch (err) {
+    addLog("Error: " + err.message);
+  }
+}
+
+function showConfirmation(matched) {
+  const container = document.getElementById("confirmFields");
+  container.innerHTML = Object.entries(matched).map(([name, info]) => {
+    const value = typeof info === "object" && info !== null ? info.value : info;
+    return `<div class="row">
+      <span class="lbl">${name}:</span>
+      <input type="text" class="confirm-input" data-field="${name}" value="${value || ""}" style="flex:1; margin-left:5px; padding:2px; font-size:11px; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:3px;">
+    </div>`;
+  }).join("");
+  const card = document.getElementById("confirmCard");
+  card.style.display = "block";
+  card.scrollIntoView({ behavior: "smooth", block: "end" });
+}
+
+async function confirmAndFill() {
+  // Verificar si autocompletado está habilitado
+  const result = await chrome.storage.local.get("autofillEnabled");
+  const enabled = result.autofillEnabled !== false;
+  
+  if (!enabled) {
+    addLog("Autocompletado está desactivado. No se puede completar.");
+    return;
+  }
+  
+  const inputs = document.querySelectorAll("#confirmFields .confirm-input");
+  const data = {};
+  inputs.forEach(input => {
+    data[input.dataset.field] = input.value;
+  });
+
+  try {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    await chrome.tabs.sendMessage(tab.id, { action: "autofill", data });
+    addLog(`Autocompletado confirmado: ${Object.keys(data).length} campos`);
+    document.getElementById("confirmCard").style.display = "none";
+    document.getElementById("statusTxt").textContent = "Autocompletado aplicado";
+  } catch (err) {
+    addLog("Error al confirmar: " + err.message);
+  }
+}
+
+function cancelConfirm() {
+  document.getElementById("confirmCard").style.display = "none";
 }
 
 function buildMapping(p) {
@@ -95,7 +221,7 @@ function buildMapping(p) {
     email: p.email, correo: p.email, telefono: p.telefono, phone: p.telefono,
     linkedin: p.linkedin, portfolio: p.portfolio, website: p.portfolio,
     ubicacion: p.ubicacion, location: p.ubicacion, titulo: p.titulo_profesional,
-    title: p.titulo_profesional, resumen: p.resumen, summary: p.resumen,
+    title: p.titulo_profesional, resumen: p.resumen, summary: p.resumen, mensaje: p.resumen,
     habilidades: (p.habilidades || []).join(", "), skills: (p.habilidades || []).join(", "),
   };
 }

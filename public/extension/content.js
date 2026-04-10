@@ -17,17 +17,43 @@
         });
       }
 
-      if (msg.action === "autofill") {
-        let filled = 0;
+      if (msg.action === "preview") {
+        let previewed = 0;
         Object.entries(msg.data).forEach(([name, val]) => {
           const el = document.querySelector(`[name="${name}"]`) || document.getElementById(name);
           if (el) {
-            el.value = val;
-            el.dispatchEvent(new Event("input", { bubbles: true }));
-            filled++;
+            el.style.outline = "2px dashed #38bdf8";
+            el.title = `SmartApply: ${val}`;
+            previewed++;
           }
         });
-        sendResponse({ filled });
+        sendResponse({ previewed });
+      }
+
+      if (msg.action === "autofill") {
+        // Verificar si el autocompletado está habilitado
+        chrome.storage.local.get("autofillEnabled", (result) => {
+          const enabled = result.autofillEnabled !== false; // Default to true
+          
+          if (!enabled) {
+            console.log("[SmartApply] Autocompletado desactivado. Cancelando...");
+            sendResponse({ filled: 0, disabled: true });
+            return;
+          }
+          
+          let filled = 0;
+          Object.entries(msg.data).forEach(([name, val]) => {
+            const el = document.querySelector(`[name="${name}"]`) || document.getElementById(name);
+            if (el) {
+              el.value = val;
+              el.dispatchEvent(new Event("input", { bubbles: true }));
+              filled++;
+            }
+          });
+          sendResponse({ filled });
+        });
+        
+        return true; // Keep channel open for async response
       }
 
       return true;

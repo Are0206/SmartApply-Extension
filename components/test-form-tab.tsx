@@ -203,6 +203,7 @@ export default function TestFormTab({ profile, onAction }: TestFormTabProps) {
               </label>
               <input
                 type={field.type}
+                name={field.key}
                 value={testFormData[field.key as keyof typeof testFormData]}
                 onChange={(e) =>
                   setTestFormData((prev) => ({
@@ -227,6 +228,7 @@ export default function TestFormTab({ profile, onAction }: TestFormTabProps) {
             Resumen profesional
           </label>
           <textarea
+            name="mensaje"
             rows={3}
             value={testFormData.mensaje}
             onChange={(e) =>

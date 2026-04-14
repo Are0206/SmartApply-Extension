@@ -201,8 +201,12 @@ async function confirmAndFill() {
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    await chrome.tabs.sendMessage(tab.id, { action: "autofill", data });
-    addLog(`Autocompletado confirmado: ${Object.keys(data).length} campos`);
+    const result = await chrome.tabs.sendMessage(tab.id, { action: "autofill", data, confirm: true });
+    const filledFields = result?.fields || [];
+    addLog(`Autocompletado confirmado: ${filledFields.length} campos`);
+    if (filledFields.length) {
+      addLog(`Campos completados: ${filledFields.join(", ")}`);
+    }
     document.getElementById("confirmCard").style.display = "none";
     document.getElementById("statusTxt").textContent = "Autocompletado aplicado";
   } catch (err) {

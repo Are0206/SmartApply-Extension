@@ -107,7 +107,26 @@ async function handlePreview() {
     addLog("Preview iniciado");
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return addLog("No hay pestaña activa");
-    const result = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
+    
+    // Inyectar el content script si no está inyectado
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content.js"]
+      });
+    } catch (injectionErr) {
+      console.warn("Content script ya estaba inyectado o no se pudo inyectar", injectionErr);
+    }
+    
+    let result;
+    try {
+      result = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
+    } catch (msgErr) {
+      addLog("Error: No se pudo comunicar con la página. Intenta recargar la pestaña.");
+      console.error("Send message error:", msgErr);
+      return;
+    }
+    
     const fields = result?.fields || [];
     const res = await fetch(`${API()}/api/profile`);
     const profile = (await res.json()).data;
@@ -140,20 +159,64 @@ async function handleAutofill() {
     document.getElementById("statusTxt").textContent = "Autocompletando...";
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) return addLog("No hay pestaña activa");
-    const result2 = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
+    
+    // Inyectar el content script si no está inyectado
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content.js"]
+      });
+    } catch (injectionErr) {
+      console.warn("Content script ya estaba inyectado o no se pudo inyectar", injectionErr);
+    }
+    
+    let result2;
+    try {
+      result2 = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
+    } catch (msgErr) {
+      addLog("Error: No se pudo comunicar con la página. Intenta recargar la pestaña.");
+      document.getElementById("statusTxt").textContent = "Error de comunicación";
+      console.error("Send message error:", msgErr);
+      return;
+    }
+    
     const fields = result2?.fields || [];
     if (!fields.length) {
       addLog("No se encontraron campos en la página.");
       document.getElementById("statusTxt").textContent = "No se encontraron campos";
       return;
     }
+    console.log("[SmartApply] Campos detectados en la página:", fields.map(f => f.name));
     const res = await fetch(`${API()}/api/profile`);
     const profile = (await res.json()).data;
     const mapping = buildMapping(profile);
     const matched = {};
+    
+    // Mapear SOLO los campos que están realmente en la página
     fields.forEach(f => {
-      if (mapping[f.name]) matched[f.name] = mapping[f.name];
+      if (mapping[f.name]) {
+        matched[f.name] = mapping[f.name];
+        console.log(`[SmartApply] ✓ Campo "${f.name}" detectado y mapeado`);
+      }
     });
+    
+    // SOLO agregar nombre_completo como fallback si:
+    // 1. La página tiene un campo "nombre_completo" detectado, O
+    // 2. La página NO tiene "nombre" ni "apellido" pero tenemos datos para llenar
+    const tieneNombreCompleto = fields.some(f => f.name === "nombre_completo");
+    const tieneNombreOApellido = fields.some(f => f.name === "nombre" || f.name === "apellido");
+    
+    if (tieneNombreCompleto && !matched.nombre_completo) {
+      // La página tiene nombre_completo, asegurarse de rellenarlo
+      matched.nombre_completo = `${profile.nombre} ${profile.apellido}`;
+      console.log("[SmartApply] Campo nombre_completo agregado");
+    } else if (!tieneNombreOApellido && !tieneNombreCompleto && Object.keys(matched).length === 0) {
+      // No detectó nada de nombre, agregar nombre_completo como último recurso
+      matched.nombre_completo = `${profile.nombre} ${profile.apellido}`;
+      console.log("[SmartApply] Agregando nombre_completo como último recurso");
+    }
+    
+    console.log("[SmartApply] Campos finales para rellenar:", Object.keys(matched));
 
     currentMatched = matched;
     if (!Object.keys(matched).length) {
@@ -198,11 +261,27 @@ async function confirmAndFill() {
   inputs.forEach(input => {
     data[input.dataset.field] = input.value;
   });
+  
+  // Obtener perfil para incluir nombre y apellido por separado
+  try {
+    const res = await fetch(`${API()}/api/profile`);
+    const profile = (await res.json()).data;
+    
+    // Siempre agregar nombre y apellido por separado para soportar nombre_completo
+    data.nombre = profile.nombre;
+    data.apellido = profile.apellido;
+  } catch (err) {
+    console.error("Error obtener perfil:", err);
+  }
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const result = await chrome.tabs.sendMessage(tab.id, { action: "autofill", data, confirm: true });
-    const filledFields = result?.fields || [];
+    let filledFields = result?.fields || [];
+    
+    // Remover duplicados de filledFields
+    filledFields = [...new Set(filledFields)];
+    
     addLog(`Autocompletado confirmado: ${filledFields.length} campos`);
     if (filledFields.length) {
       addLog(`Campos completados: ${filledFields.join(", ")}`);
@@ -236,14 +315,47 @@ function cancelConfirm() {
 }
 
 function buildMapping(p) {
+  const fullName = `${p.nombre} ${p.apellido}`;
   return {
-    nombre: p.nombre, first_name: p.nombre, apellido: p.apellido, last_name: p.apellido,
-    name: `${p.nombre} ${p.apellido}`, full_name: `${p.nombre} ${p.apellido}`,
-    email: p.email, correo: p.email, telefono: p.telefono, phone: p.telefono,
-    linkedin: p.linkedin, portfolio: p.portfolio, website: p.portfolio,
-    ubicacion: p.ubicacion, location: p.ubicacion, titulo: p.titulo_profesional,
-    title: p.titulo_profesional, resumen: p.resumen, summary: p.resumen, mensaje: p.resumen,
-    habilidades: (p.habilidades || []).join(", "), skills: (p.habilidades || []).join(", "),
+    // Nombre individual
+    nombre: p.nombre, 
+    first_name: p.nombre, 
+    firstname: p.nombre,
+    first: p.nombre,
+    
+    // Apellido
+    apellido: p.apellido, 
+    last_name: p.apellido,
+    lastname: p.apellido,
+    last: p.apellido,
+    
+    // Nombre completo
+    nombre_completo: fullName,
+    fullname: fullName,
+    full_name: fullName,
+    "full-name": fullName,
+    
+    // Email
+    email: p.email, 
+    correo: p.email, 
+    
+    // Teléfono
+    telefono: p.telefono, 
+    phone: p.telefono,
+    
+    // Otros
+    linkedin: p.linkedin, 
+    portfolio: p.portfolio, 
+    website: p.portfolio,
+    ubicacion: p.ubicacion, 
+    location: p.ubicacion, 
+    titulo: p.titulo_profesional,
+    title: p.titulo_profesional, 
+    resumen: p.resumen, 
+    summary: p.resumen, 
+    mensaje: p.resumen,
+    habilidades: (p.habilidades || []).join(", "), 
+    skills: (p.habilidades || []).join(", "),
   };
 }
 

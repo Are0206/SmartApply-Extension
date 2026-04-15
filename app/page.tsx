@@ -26,6 +26,7 @@ export default function Home() {
    */
   async function loadUserProfile() {
     const userData = await fetchUserProfile()
+    console.log("API response profile:", userData)
     if (userData) {
       setProfile(userData)
     }

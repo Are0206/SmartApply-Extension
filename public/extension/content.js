@@ -1,32 +1,100 @@
 // SmartApply Extension - content.js
-// Detecta campos de formularios en la pagina
+// Detecta campos de formularios en la pagina de forma inteligente
 
 (function () {
   "use strict";
 
-  // --- 1. NUEVAS REGLAS DE DETECCIÓN INTELIGENTE ---
-  const allowedTypes = ["text", "email", "tel", "number", ""];
-  const allowedWords = ["email", "nombre", "apellido","first", "titulo","ubicacion", "habilidades", "last","resumen" ,"phone", "tel", "mobile", 
-    "address", "location", "city", "country", "linkedin", 
-    "website", "github", "portfolio", "url", "summary", "skills", "title"];
+  // --- MAPEO INTELIGENTE DE CAMPOS DEL PERFIL A FORMULARIOS ---
+  const fieldMappings = {
+    nombre: ["nombre", "first_name", "firstname", "first", "fname", "name", "given_name"],
+    apellido: ["apellido", "last_name", "lastname", "last", "lname", "surname", "apellidos"],
+    nombre_completo: ["nombre_completo", "fullname", "full_name", "full-name", "nombre completo", "namefull"],
+    email: ["email", "correo", "mail", "e-mail", "e_mail"],
+    telefono: ["telefono", "phone", "tel", "mobile", "cellphone", "phone_number", "cel", "telephone"],
+    titulo_profesional: ["titulo", "titulo_profesional", "job_title", "title", "profession", "cargo", "position", "puesto"],
+    ubicacion: ["ubicacion", "location", "ciudad", "city", "country", "pais", "address", "lugar", "state", "provincia"],
+    linkedin: ["linkedin", "linkedin_url", "linkedinurl"],
+    portfolio: ["portfolio", "portfolio_url", "web", "website", "url"],
+    resumen: ["resumen", "summary", "bio", "about", "description", "about_me", "biografía"],
+    habilidades: ["habilidades", "skills", "competencias"],
+  };
 
-  // Esta función decide si un campo nos sirve o no
+  const allowedInputTypes = ["text", "email", "tel", "number", "url", ""];
+
+  // Función para obtener el texto visible de un label asociado a un input
+  function getLabelText(input) {
+    if (!input) return "";
+    
+    const ariaLabel = input.getAttribute("aria-label");
+    if (ariaLabel) return ariaLabel.toLowerCase();
+    
+    if (input.id) {
+      const label = document.querySelector(`label[for="${input.id}"]`);
+      if (label) return label.textContent.toLowerCase();
+    }
+    
+    const parentLabel = input.closest("label");
+    if (parentLabel) return parentLabel.textContent.toLowerCase();
+    
+    const container = input.closest("div");
+    if (container) {
+      const siblingLabel = container.querySelector("label");
+      if (siblingLabel) return siblingLabel.textContent.toLowerCase();
+    }
+    
+    return "";
+  }
+
+  // Función mejorada para detectar qué campo es
+  function identifyField(input) {
+    const name = (input.name || "").toLowerCase();
+    const id = (input.id || "").toLowerCase();
+    const placeholder = (input.placeholder || "").toLowerCase();
+    const ariaLabel = (input.getAttribute("aria-label") || "").toLowerCase();
+    const labelText = getLabelText(input);
+    
+    // Crear palabras individuales para búsqueda más inteligente
+    const allText = [name, id, placeholder, ariaLabel, labelText].join(" ");
+    const words = allText.split(/[\s_-]+/).filter(w => w.length > 0);
+    
+    // Buscar coincidencias con los mappings, priorizando términos más específicos
+    const specificFields = ["nombre_completo", "apellido", "nombre"];
+    
+    for (const field of specificFields) {
+      const keywords = fieldMappings[field];
+      for (const keyword of keywords) {
+        // Buscar palabra exacta (no substring)
+        if (words.includes(keyword) || allText === keyword) {
+          return field;
+        }
+      }
+    }
+    
+    // Luego buscar otros campos (búsqueda de substring está bien para estos)
+    for (const [profileField, keywords] of Object.entries(fieldMappings)) {
+      if (["nombre_completo", "apellido", "nombre"].includes(profileField)) continue;
+      for (const keyword of keywords) {
+        if (allText.includes(keyword)) {
+          return profileField;
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  // Función mejorada para validar campos
   function isValidField(el) {
     if (!el) return false;
     
     const tagName = el.tagName ? el.tagName.toLowerCase() : "";
     const type = el.type ? el.type.toLowerCase() : "text";
-    const name = el.name ? el.name.toLowerCase() : "";
-    const id = el.id ? el.id.toLowerCase() : "";
-
-    // Aceptamos inputs y textareas (útil para direcciones largas)
+    
     if (tagName !== "input" && tagName !== "textarea") return false;
-    if (tagName === "input" && !allowedTypes.includes(type)) return false;
-
-    // Retorna true si el nombre o el ID contienen alguna palabra clave
-    return allowedWords.some(word => name.includes(word) || id.includes(word));
+    if (tagName === "input" && !allowedInputTypes.includes(type)) return false;
+    
+    return identifyField(el) !== null;
   }
-  // ------------------------------------------------
 
   function showAutofillNotification(filledFields) {
     if (!Array.isArray(filledFields) || !filledFields.length) return;
@@ -102,32 +170,37 @@
     document.body.appendChild(container);
   }
 
-  // Escuchar mensajes del popup
   if (typeof chrome !== "undefined" && chrome.runtime) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       
-      // --- 2. DETECCIÓN DE CAMPOS USANDO LA NUEVA FUNCIÓN ---
       if (msg.action === "detectFields") {
         const inputs = Array.from(document.querySelectorAll('input, textarea')).filter(isValidField);
         sendResponse({
-          fields: inputs.map(el => ({
-            name: el.name || el.id,
-            type: el.type || el.tagName.toLowerCase(),
-            value: el.value
-          })),
+          fields: inputs.map(el => {
+            const fieldName = identifyField(el);
+            return {
+              name: fieldName,
+              element: el.name || el.id,
+              type: el.type || el.tagName.toLowerCase(),
+              value: el.value
+            };
+          }),
         });
       }
 
       if (msg.action === "preview") {
         let previewed = 0;
-        Object.entries(msg.data).forEach(([key, val]) => {
-          const el = document.querySelector(`[name="${key}"]`) || document.getElementById(key);
-          if (isValidField(el)) {
+        const inputs = Array.from(document.querySelectorAll('input, textarea'));
+        
+        inputs.forEach(el => {
+          const fieldName = identifyField(el);
+          if (fieldName && msg.data[fieldName]) {
             el.style.outline = "2px dashed #38bdf8";
-            el.title = `SmartApply: ${val}`;
+            el.title = `SmartApply: ${msg.data[fieldName]}`;
             previewed++;
           }
         });
+        
         sendResponse({ previewed });
       }
 
@@ -143,17 +216,39 @@
           
           let filled = 0;
           const filledFields = [];
+          const filledFieldsSet = new Set();
+          const inputs = Array.from(document.querySelectorAll('input, textarea'));
           
-          Object.entries(msg.data).forEach(([key, val]) => {
-            const el = document.querySelector(`[name="${key}"]`) || document.getElementById(key);
-            if (isValidField(el)) {
-              if (el.value && !msg.confirm) {
-                return; // Saltar si ya tiene valor
-              }
-              el.value = val;
-              el.dispatchEvent(new Event("input", { bubbles: true }));
-              filled++;
-              filledFields.push(key);
+          inputs.forEach(el => {
+            const fieldName = identifyField(el);
+            if (!fieldName) return;
+            
+            let val;
+            
+            // Caso especial: nombre_completo
+            if (fieldName === "nombre_completo") {
+              // Usar el valor mapeado si existe, sino construir desde nombre + apellido
+              val = msg.data.nombre_completo || (msg.data.nombre && msg.data.apellido 
+                ? `${msg.data.nombre} ${msg.data.apellido}` 
+                : null);
+            } else {
+              val = msg.data[fieldName];
+            }
+            
+            if (!val) return;
+            
+            if (el.value && !msg.confirm) {
+              return; // Saltar si ya tiene valor
+            }
+            
+            el.value = val;
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+            el.dispatchEvent(new Event("change", { bubbles: true }));
+            filled++;
+            
+            if (!filledFieldsSet.has(fieldName)) {
+              filledFieldsSet.add(fieldName);
+              filledFields.push(fieldName);
             }
           });
 
@@ -169,5 +264,5 @@
     });
   }
 
-  console.log("[SmartApply] Content script cargado. Listo para detectar.");
+  console.log("[SmartApply] Content script cargado. Detección mejorada activada.");
 })();

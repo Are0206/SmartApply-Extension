@@ -206,6 +206,23 @@ async function confirmAndFill() {
     addLog(`Autocompletado confirmado: ${filledFields.length} campos`);
     if (filledFields.length) {
       addLog(`Campos completados: ${filledFields.join(", ")}`);
+      try {
+        // Extraemos solo el nombre del dominio
+        const websiteUrl = new URL(tab.url).hostname; 
+        
+        await fetch(`${API()}/api/logs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "Formulario autocompletado",
+            details: `Sitio web: ${websiteUrl}`, 
+            fields: filledFields,
+            status: "completado"
+          })
+        });
+      } catch (fetchErr) {
+        console.error("Error al guardar en el historial:", fetchErr);
+      }
     }
     document.getElementById("confirmCard").style.display = "none";
     document.getElementById("statusTxt").textContent = "Autocompletado aplicado";

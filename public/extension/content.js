@@ -4,6 +4,30 @@
 (function () {
   "use strict";
 
+  // --- 1. NUEVAS REGLAS DE DETECCIÓN INTELIGENTE ---
+  const allowedTypes = ["text", "email", "tel", "number", ""];
+  const allowedWords = ["email", "nombre", "apellido","first", "titulo","ubicacion", "habilidades", "last","resumen" ,"phone", "tel", "mobile", 
+    "address", "location", "city", "country", "linkedin", 
+    "website", "github", "portfolio", "url", "summary", "skills", "title"];
+
+  // Esta función decide si un campo nos sirve o no
+  function isValidField(el) {
+    if (!el) return false;
+    
+    const tagName = el.tagName ? el.tagName.toLowerCase() : "";
+    const type = el.type ? el.type.toLowerCase() : "text";
+    const name = el.name ? el.name.toLowerCase() : "";
+    const id = el.id ? el.id.toLowerCase() : "";
+
+    // Aceptamos inputs y textareas (útil para direcciones largas)
+    if (tagName !== "input" && tagName !== "textarea") return false;
+    if (tagName === "input" && !allowedTypes.includes(type)) return false;
+
+    // Retorna true si el nombre o el ID contienen alguna palabra clave
+    return allowedWords.some(word => name.includes(word) || id.includes(word));
+  }
+  // ------------------------------------------------
+
   function showAutofillNotification(filledFields) {
     if (!Array.isArray(filledFields) || !filledFields.length) return;
 
@@ -33,7 +57,7 @@
     header.style.borderBottom = "1px solid #1e293b";
 
     const title = document.createElement("strong");
-    title.textContent = "SmartApply completo el formulario";
+    title.textContent = "SmartApply completó el formulario";
     title.style.fontSize = "13px";
 
     const closeBtn = document.createElement("button");
@@ -73,7 +97,6 @@
 
     body.appendChild(subtitle);
     body.appendChild(list);
-
     container.appendChild(header);
     container.appendChild(body);
     document.body.appendChild(container);
@@ -82,11 +105,10 @@
   // Escuchar mensajes del popup
   if (typeof chrome !== "undefined" && chrome.runtime) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      
+      // --- 2. DETECCIÓN DE CAMPOS USANDO LA NUEVA FUNCIÓN ---
       if (msg.action === "detectFields") {
-        // Detectar solo inputs tipo text y email, y con name relevante
-        const allowedNames = ["email", "name", "phone"];
-        const inputs = Array.from(document.querySelectorAll('input'))
-          .filter(el => ["text", "email"].includes(el.type) && allowedNames.includes(el.name));
+        const inputs = Array.from(document.querySelectorAll('input, textarea')).filter(isValidField);
         sendResponse({
           fields: inputs.map(el => ({
             name: el.name || el.id,
@@ -98,45 +120,40 @@
 
       if (msg.action === "preview") {
         let previewed = 0;
-        Object.entries(msg.data).forEach(([name, val]) => {
-          const el = document.querySelector(`[name="${name}"]`) || document.getElementById(name);
-          if (el) {
-            // Solo resaltar si es text/email y name relevante
-            if (["text", "email"].includes(el.type) && ["email", "name", "phone"].includes(el.name)) {
-              el.style.outline = "2px dashed #38bdf8";
-              el.title = `SmartApply: ${val}`;
-              previewed++;
-            }
+        Object.entries(msg.data).forEach(([key, val]) => {
+          const el = document.querySelector(`[name="${key}"]`) || document.getElementById(key);
+          if (isValidField(el)) {
+            el.style.outline = "2px dashed #38bdf8";
+            el.title = `SmartApply: ${val}`;
+            previewed++;
           }
         });
         sendResponse({ previewed });
       }
 
       if (msg.action === "autofill") {
-        // Verificar si el autocompletado está habilitado
         chrome.storage.local.get("autofillEnabled", (result) => {
-          const enabled = result.autofillEnabled !== false; // Default to true
+          const enabled = result.autofillEnabled !== false; 
           
           if (!enabled) {
-            console.log("[SmartApply] Autocompletado desactivado. Cancelando...");
+            console.log("[SmartApply] Autocompletado desactivado.");
             sendResponse({ filled: 0, disabled: true });
             return;
           }
           
           let filled = 0;
           const filledFields = [];
-          // No modificar campos con valor, a menos que se confirme (msg.confirm == true)
-          Object.entries(msg.data).forEach(([name, val]) => {
-            const el = document.querySelector(`[name="${name}"]`) || document.getElementById(name);
-            if (el && ["text", "email"].includes(el.type) && ["email", "name", "phone"].includes(el.name)) {
+          
+          Object.entries(msg.data).forEach(([key, val]) => {
+            const el = document.querySelector(`[name="${key}"]`) || document.getElementById(key);
+            if (isValidField(el)) {
               if (el.value && !msg.confirm) {
-                // Saltar si ya tiene valor y no hay confirmación
-                return;
+                return; // Saltar si ya tiene valor
               }
               el.value = val;
               el.dispatchEvent(new Event("input", { bubbles: true }));
               filled++;
-              filledFields.push(name);
+              filledFields.push(key);
             }
           });
 
@@ -146,14 +163,11 @@
 
           sendResponse({ filled, fields: filledFields });
         });
-        
-        return true; // Keep channel open for async response
+        return true; 
       }
-
       return true;
     });
   }
 
-  console.log("[SmartApply] Content script cargado. Campos detectados:", 
-    document.querySelectorAll('input[name], textarea[name]').length);
+  console.log("[SmartApply] Content script cargado. Listo para detectar.");
 })();

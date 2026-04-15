@@ -83,8 +83,9 @@
   if (typeof chrome !== "undefined" && chrome.runtime) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (msg.action === "detectFields") {
-        // Detectar solo inputs tipo text y email, y con name relevante
-        const allowedNames = ["email", "name", "phone"];
+        // Detectar campos relevantes: text/email con nombres relacionados a email, name, phone, address, etc.
+        const allowedTypes = ["text", "email", "tel", "number"];
+        const allowedWords = ["email", "name", "phone", "tel", "mobile", "celular", "movil", "address", "direccion", "ubicacion"];
         const inputs = Array.from(document.querySelectorAll('input'))
           .filter(el => ["text", "email"].includes(el.type) && allowedNames.includes(el.name));
         sendResponse({
@@ -127,8 +128,11 @@
           const filledFields = [];
           // No modificar campos con valor, a menos que se confirme (msg.confirm == true)
           Object.entries(msg.data).forEach(([name, val]) => {
-            const el = document.querySelector(`[name="${name}"]`) || document.getElementById(name);
-            if (el && ["text", "email"].includes(el.type) && ["email", "name", "phone"].includes(el.name)) {
+            // Revisamos que el tipo sea válido y que el name o el id contengan alguna palabra clave
+            const fieldName = (el.name || "").toLowerCase();
+            const fieldId = (el.id || "").toLowerCase();
+            
+            if (allowedTypes.includes(el.type) && allowedWords.some(word => fieldName.includes(word) || fieldId.includes(word))) {
               if (el.value && !msg.confirm) {
                 // Saltar si ya tiene valor y no hay confirmación
                 return;

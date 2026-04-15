@@ -16,6 +16,22 @@ interface LogsTabProps {
  * - Envíos de formularios
  */
 export default function LogsTab({ logs, onRefresh }: LogsTabProps) {
+  
+  async function handleClearLogs() {
+    if (confirm("¿Estás seguro de que deseas borrar todo el historial?")) {
+      try {
+        // Usamos el puerto 5000 backend Python
+        await fetch("http://localhost:5000/api/logs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "clear" })
+        });
+        onRefresh(); // Actualiza la tabla para que se vea vacía
+      } catch (error) {
+        console.error("Error al limpiar historial", error);
+      }
+    }
+  }
   /**
    * Mapeo de colores para los diferentes estados de acciones
    */
@@ -42,7 +58,6 @@ export default function LogsTab({ logs, onRefresh }: LogsTabProps) {
 
   return (
     <div className="rounded-lg border border-border bg-card p-6">
-      {/* Encabezado con título y botón de actualizar */}
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-lg font-semibold text-foreground">
@@ -52,12 +67,22 @@ export default function LogsTab({ logs, onRefresh }: LogsTabProps) {
             Registro de todas las acciones del sistema.
           </p>
         </div>
-        <button
-          onClick={onRefresh}
-          className="rounded-md bg-muted px-3 py-1.5 text-sm font-medium text-foreground hover:opacity-80 transition-opacity"
-        >
-          Refrescar
-        </button>
+        
+        {/* Botones de acción */}
+        <div className="flex gap-2">
+          <button
+            onClick={handleClearLogs}
+            className="rounded-md bg-red-500/10 px-3 py-1.5 text-sm font-medium text-red-500 hover:bg-red-500/20 transition-colors"
+          >
+            Borrar historial
+          </button>
+          <button
+            onClick={onRefresh}
+            className="rounded-md bg-muted px-3 py-1.5 text-sm font-medium text-foreground hover:opacity-80 transition-opacity"
+          >
+            Refrescar
+          </button>
+        </div>
       </div>
 
       {/* Estado vacío */}

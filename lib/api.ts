@@ -31,6 +31,69 @@ export interface ActionLog {
   timestamp?: string
 }
 
+// ==================== MULTI-PERFIL (HU-10) ====================
+
+export interface ProfilesResponse {
+  profiles: UserProfile[]
+  activeProfileId: string
+}
+
+/** Obtiene todos los perfiles y el ID del activo */
+export async function fetchAllProfiles(): Promise<ProfilesResponse | null> {
+  try {
+    const response = await fetch("/api/profiles")
+    const data = await response.json() as { success: boolean; data: UserProfile[]; activeProfileId: string }
+    if (!response.ok || !data.success) return null
+    return { profiles: data.data, activeProfileId: data.activeProfileId }
+  } catch {
+    return null
+  }
+}
+
+/** Crea un nuevo perfil */
+export async function createUserProfile(profileData: Partial<UserProfile>): Promise<UserProfile | null> {
+  try {
+    const response = await fetch("/api/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profileData),
+    })
+    const data = await response.json() as ApiResponse<UserProfile>
+    if (!response.ok || !data.success) return null
+    return data.data || null
+  } catch {
+    return null
+  }
+}
+
+/** Cambia el perfil activo */
+export async function setActiveProfile(id: string): Promise<boolean> {
+  try {
+    const response = await fetch("/api/profiles/active", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    })
+    const data = await response.json() as ApiResponse
+    return response.ok && !!data.success
+  } catch {
+    return false
+  }
+}
+
+/** Elimina un perfil por ID */
+export async function deleteUserProfile(id: string): Promise<boolean> {
+  try {
+    const response = await fetch(`/api/profiles/${id}`, { method: "DELETE" })
+    const data = await response.json() as ApiResponse
+    return response.ok && !!data.success
+  } catch {
+    return false
+  }
+}
+
+// ==================== PERFIL ACTIVO ====================
+
 /**
  * Obtiene el perfil del usuario desde la API
  */

@@ -118,6 +118,18 @@ export default function LogsTab({ logs, onRefresh }: LogsTabProps) {
                   <p className="text-xs text-muted-foreground line-clamp-2">
                     {logEntry.details}
                   </p>
+                  {/* URL del sitio donde se realizó */}
+                  {logEntry.url && logEntry.url !== "desconocido" && logEntry.url !== "" && (
+                    <a
+                      href={logEntry.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-0.5 inline-block text-xs text-primary hover:underline truncate max-w-xs"
+                      title={logEntry.url}
+                    >
+                      🔗 {(() => { try { return new URL(logEntry.url).hostname } catch { return logEntry.url } })()}
+                    </a>
+                  )}
                   {/* Campos afectados */}
                   {logEntry.fields && logEntry.fields.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">

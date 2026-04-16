@@ -52,6 +52,14 @@
     <label style="font-size:11px;color:#94a3b8;">URL del Backend:</label>
     <input class="url-input" type="text" id="apiUrl" value="http://localhost:3000" />
 
+    <!-- Selector de perfil activo (HU-10) -->
+    <div style="margin-bottom:10px;">
+      <label style="font-size:11px;color:#94a3b8;display:block;margin-bottom:4px;">Perfil activo:</label>
+      <select id="profileSelect" style="width:100%;background:#1e293b;border:1px solid #334155;border-radius:4px;padding:5px 8px;color:#e2e8f0;font-size:11px;font-family:system-ui,sans-serif;">
+        <option>Cargando perfiles...</option>
+      </select>
+    </div>
+
     <div class="card" id="profileCard">
       <h3>Perfil Cargado</h3>
       <div id="profileFields"><p style="font-size:11px;color:#94a3b8;">Cargando...</p></div>

@@ -31,6 +31,7 @@ document.addEventListener("DOMContentLoaded", () => {
   loadProfile();
   setupEventListeners();
   loadToggleState();
+  loadProfileSelector();
 });
 
 function setupEventListeners() {
@@ -39,6 +40,48 @@ function setupEventListeners() {
   document.getElementById("confirmFillBtn").addEventListener("click", confirmAndFill);
   document.getElementById("cancelConfirmBtn").addEventListener("click", cancelConfirm);
   document.getElementById("toggleSwitch").addEventListener("click", handleToggle);
+}
+
+// ==================== SELECTOR DE PERFIL ACTIVO (HU-10) ====================
+
+async function loadProfileSelector() {
+  try {
+    const res = await fetch(`${API()}/api/profiles`);
+    const data = await res.json();
+    if (!data.success) return;
+
+    const profiles = data.data;
+    const activeId = data.activeProfileId;
+
+    const select = document.getElementById("profileSelect");
+    if (!select) return;
+
+    select.innerHTML = profiles.map(p =>
+      `<option value="${p.id}" ${p.id === activeId ? "selected" : ""}>
+        ${p.nombre} ${p.apellido} — ${p.titulo_profesional}
+      </option>`
+    ).join("");
+
+    select.addEventListener("change", async () => {
+      const selectedId = select.value;
+      try {
+        const res = await fetch(`${API()}/api/profiles/active`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: selectedId })
+        });
+        const result = await res.json();
+        if (result.success) {
+          addLog(`Perfil activo cambiado`);
+          loadProfile(); // Recargar datos del perfil activo en la card
+        }
+      } catch (err) {
+        addLog("Error al cambiar perfil: " + err.message);
+      }
+    });
+  } catch (err) {
+    console.error("Error cargando selector de perfiles:", err);
+  }
 }
 
 // ==================== TOGGLE STATE ====================
@@ -286,16 +329,21 @@ async function confirmAndFill() {
     if (filledFields.length) {
       addLog(`Campos completados: ${filledFields.join(", ")}`);
       try {
-        // Extraemos solo el nombre del dominio
-        const websiteUrl = new URL(tab.url).hostname; 
-        
+        const fullUrl = tab.url;
+        const hostname = new URL(tab.url).hostname;
+        const now = new Date().toLocaleString("es-ES", {
+          dateStyle: "short",
+          timeStyle: "short",
+        });
+
         await fetch(`${API()}/api/logs`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             action: "Formulario autocompletado",
-            details: `Sitio web: ${websiteUrl}`, 
+            details: `Sitio: ${hostname} — Fecha: ${now} — URL: ${fullUrl}`,
             fields: filledFields,
+            url: fullUrl,
             status: "completado"
           })
         });

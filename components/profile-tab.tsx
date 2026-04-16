@@ -1,28 +1,25 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { updateUserProfile, logAction, type UserProfile } from "@/lib/api"
+import { updateUserProfile, createUserProfile, logAction, type UserProfile } from "@/lib/api"
+import ProfileSelector from "@/components/profile-selector"
 
 interface ProfileTabProps {
   profile: UserProfile | null
+  profiles: UserProfile[]
+  activeProfileId: string
   onSave: () => void
 }
 
 /**
- * Pestaña para crear y editar el perfil del usuario
- * 
- * Permite guardar información personal que será usada
- * para autocompletar formularios automáticamente.
+ * Pestaña para gestionar perfiles (HU-10 + edición existente)
  */
-export default function ProfileTab({ profile, onSave }: ProfileTabProps) {
+export default function ProfileTab({ profile, profiles, activeProfileId, onSave }: ProfileTabProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [feedbackMessage, setFeedbackMessage] = useState("")
   const [formData, setFormData] = useState<Record<string, string>>({})
+  const [isCreatingNew, setIsCreatingNew] = useState(false)
 
-  // Log para depuración
-  console.log("ProfileTab received profile:", profile)
-
-  // Actualizar formData cuando el perfil se carga
   useEffect(() => {
     if (profile) {
       setFormData({
@@ -35,12 +32,12 @@ export default function ProfileTab({ profile, onSave }: ProfileTabProps) {
         linkedin: profile.linkedin || "",
         resumen: profile.resumen || "",
       })
+      // Limpiar modo creación al cambiar perfil activo
+      setIsCreatingNew(false)
+      setFeedbackMessage("")
     }
-  }, [profile])
+  }, [profile, activeProfileId])
 
-  /**
-   * Define los campos del formulario que podrán ser editados
-   */
   const profileFields = [
     { key: "nombre", label: "Nombre" },
     { key: "apellido", label: "Apellido" },
@@ -51,131 +48,165 @@ export default function ProfileTab({ profile, onSave }: ProfileTabProps) {
     { key: "linkedin", label: "LinkedIn" },
   ]
 
-  /**
-   * Maneja cambios en los inputs
-   */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.currentTarget
-    setFormData(prev => ({ ...prev, [name]: value }))
+    setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  /**
-   * Maneja el envío del formulario de perfil
-   * 
-   * 1. Recolecta los datos del formulario
-   * 2. Los envía a la API
-   * 3. Registra la acción en la bitácora
-   * 4. Recarga los datos globales
-   */
+  function handleCreateNew() {
+    setIsCreatingNew(true)
+    setFeedbackMessage("")
+    setFormData({
+      nombre: "",
+      apellido: "",
+      email: "",
+      telefono: "",
+      titulo_profesional: "",
+      ubicacion: "",
+      linkedin: "",
+      resumen: "",
+    })
+  }
+
   async function handleProfileSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setIsSaving(true)
     setFeedbackMessage("")
 
     try {
-      // Actualizar el perfil en la API con formData
-      const updateSuccess = await updateUserProfile(formData)
-
-      if (!updateSuccess) {
-        setFeedbackMessage("Error al guardar el perfil. Intenta de nuevo.")
-        setIsSaving(false)
-        return
+      if (isCreatingNew) {
+        // Crear nuevo perfil (HU-10)
+        const created = await createUserProfile(formData)
+        if (!created) {
+          setFeedbackMessage("Error al crear el perfil.")
+          setIsSaving(false)
+          return
+        }
+        await logAction({
+          action: "Perfil creado",
+          details: `Nuevo perfil: ${formData.nombre} ${formData.apellido}`,
+          fields: Object.keys(formData),
+          status: "completado",
+        })
+        setFeedbackMessage("Perfil creado correctamente")
+        setIsCreatingNew(false)
+      } else {
+        // Actualizar perfil activo
+        const updateSuccess = await updateUserProfile(formData)
+        if (!updateSuccess) {
+          setFeedbackMessage("Error al guardar el perfil.")
+          setIsSaving(false)
+          return
+        }
+        await logAction({
+          action: "Perfil actualizado",
+          details: `Campos actualizados: ${Object.keys(formData).join(", ")}`,
+          fields: Object.keys(formData),
+          status: "completado",
+        })
+        setFeedbackMessage("Perfil guardado correctamente")
       }
 
-      // Registrar la acción en la bitácora
-      await logAction({
-        action: "Perfil actualizado",
-        details: `Se actualizaron los campos: ${Object.keys(formData).join(", ")}`,
-        fields: Object.keys(formData),
-        status: "completado",
-      })
-
-      setFeedbackMessage("Perfil guardado correctamente")
       setIsSaving(false)
-      
-      // Recargar todos los datos
       onSave()
     } catch (error) {
       console.error("Error al guardar perfil:", error)
-      setFeedbackMessage("Error inesperado. Por favor intenta de nuevo.")
+      setFeedbackMessage("Error inesperado. Intenta de nuevo.")
       setIsSaving(false)
     }
   }
 
-  // Mostrar mensaje de carga mientras se obtiene el perfil
-  const isLoading = !profile
-
   return (
-    <div className="rounded-lg border border-border bg-card p-6">
-      <h2 className="text-lg font-semibold text-foreground mb-1">
-        Crear / Editar perfil
-      </h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Estos datos se usarán para autocompletar formularios de manera
-        inteligente.
-      </p>
+    <div>
+      {/* Selector de perfiles (HU-10) */}
+      <ProfileSelector
+        profiles={profiles}
+        activeProfileId={activeProfileId}
+        onProfileChange={onSave}
+        onCreateNew={handleCreateNew}
+      />
 
-      {isLoading ? (
-        <p className="text-muted-foreground">Cargando perfil...</p>
-      ) : (
-        <form onSubmit={handleProfileSubmit} className="space-y-4">
-          {/* Campos de datos personales en grid */}
-          <div className="grid grid-cols-2 gap-4">
-            {profileFields.map((field) => (
-              <div key={field.key}>
-                <label className="mb-1 block text-sm font-medium text-foreground">
-                  {field.label}
-                </label>
-                <input
-                  type="text"
-                  name={field.key}
-                  value={formData[field.key] || ""}
-                  onChange={handleInputChange}
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                />
-              </div>
-            ))}
-          </div>
+      {/* Formulario de edición / creación */}
+      <div className="rounded-lg border border-border bg-card p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-1">
+          {isCreatingNew ? "Crear nuevo perfil" : "Editar perfil activo"}
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          {isCreatingNew
+            ? "Ingresa los datos del nuevo perfil."
+            : "Estos datos se usarán para autocompletar formularios."}
+        </p>
 
-          {/* Campo para resumen profesional */}
-          <div>
-            <label className="mb-1 block text-sm font-medium text-foreground">
-              Resumen profesional
-            </label>
-            <textarea
-              name="resumen"
-              rows={3}
-              value={formData.resumen || ""}
-              onChange={handleInputChange}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
+        {!profile && !isCreatingNew ? (
+          <p className="text-muted-foreground">Cargando perfil...</p>
+        ) : (
+          <form onSubmit={handleProfileSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              {profileFields.map((field) => (
+                <div key={field.key}>
+                  <label className="mb-1 block text-sm font-medium text-foreground">
+                    {field.label}
+                  </label>
+                  <input
+                    type="text"
+                    name={field.key}
+                    value={formData[field.key] || ""}
+                    onChange={handleInputChange}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                </div>
+              ))}
+            </div>
 
-          {/* Botones de acción */}
-          <div className="flex items-center gap-3">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              {isSaving ? "Guardando..." : "Guardar perfil"}
-            </button>
-            
-            {/* Mensaje de resultado */}
-            {feedbackMessage && (
-              <span
-                className={`text-sm font-medium ${
-                  feedbackMessage.includes("Error")
-                    ? "text-destructive"
-                    : "text-primary"
-                }`}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-foreground">
+                Resumen profesional
+              </label>
+              <textarea
+                name="resumen"
+                rows={3}
+                value={formData.resumen || ""}
+                onChange={handleInputChange}
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {feedbackMessage}
-              </span>
-            )}
-          </div>
-        </form>
-      )}
+                {isSaving
+                  ? "Guardando..."
+                  : isCreatingNew
+                  ? "Crear perfil"
+                  : "Guardar perfil"}
+              </button>
+
+              {isCreatingNew && (
+                <button
+                  type="button"
+                  onClick={() => { setIsCreatingNew(false); setFeedbackMessage("") }}
+                  className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:opacity-80 transition-opacity"
+                >
+                  Cancelar
+                </button>
+              )}
+
+              {feedbackMessage && (
+                <span
+                  className={`text-sm font-medium ${
+                    feedbackMessage.includes("Error") ? "text-destructive" : "text-primary"
+                  }`}
+                >
+                  {feedbackMessage}
+                </span>
+              )}
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   )
 }

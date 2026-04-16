@@ -1,9 +1,8 @@
 /**
  * Data Store
- * 
+ *
  * Almacenamiento en memoria para esta POC.
- * En producción, esto sería reemplazado por una base de datos real
- * (PostgreSQL, MongoDB, Firebase, etc.)
+ * En producción, esto sería reemplazado por una base de datos real.
  */
 
 // ==================== TIPOS ====================
@@ -38,9 +37,6 @@ export interface ActionLog {
 
 // ==================== DATOS POR DEFECTO ====================
 
-/**
- * Perfil de usuario por defecto (datos de ejemplo)
- */
 const defaultProfile: UserProfile = {
   id: "usr_001",
   nombre: "Carlos",
@@ -57,32 +53,20 @@ const defaultProfile: UserProfile = {
     "Desarrollador Full-Stack en TechCorp (2023-presente). Practicante en DevShop (2022-2023).",
   educacion:
     "Bachillerato en Ingeniería en Computación - Universidad de Costa Rica (2024)",
-  habilidades: [
-    "JavaScript",
-    "TypeScript",
-    "Python",
-    "React",
-    "Node.js",
-    "SQL",
-    "Git",
-    "Docker",
-  ],
+  habilidades: ["JavaScript","TypeScript","Python","React","Node.js","SQL","Git","Docker"],
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 }
 
 // ==================== ESTADO GLOBAL ====================
 
-/**
- * Perfil actual del usuario
- * Se inicia con los datos por defecto
- */
-let profile: UserProfile = { ...defaultProfile }
+/** Lista de todos los perfiles (HU-10) */
+let profiles: UserProfile[] = [{ ...defaultProfile }]
 
-/**
- * Historial de acciones/eventos
- * Se mantiene una lista de todas las operaciones realizadas
- */
+/** ID del perfil activo (HU-10) */
+let activeProfileId: string = defaultProfile.id
+
+/** Historial de acciones */
 let actionLogs: ActionLog[] = [
   {
     id: "log_001",
@@ -97,53 +81,84 @@ let actionLogs: ActionLog[] = [
 
 // ==================== OPERACIONES DEL PERFIL ====================
 
-/**
- * Obtiene una copia del perfil actual
- */
+/** Obtiene el perfil activo actual */
 export function getProfile(): UserProfile {
-  return { ...profile }
+  const active = profiles.find((p) => p.id === activeProfileId)
+  return active ? { ...active } : { ...profiles[0] }
 }
 
-/**
- * Actualiza el perfil con los datos proporcionados
- * Automáticamente actualiza la fecha de modificación
- */
-export function updateProfile(data: Partial<UserProfile>): UserProfile {
-  profile = {
-    ...profile,
+/** Obtiene todos los perfiles (HU-10) */
+export function getAllProfiles(): UserProfile[] {
+  return profiles.map((p) => ({ ...p }))
+}
+
+/** Obtiene el ID del perfil activo (HU-10) */
+export function getActiveProfileId(): string {
+  return activeProfileId
+}
+
+/** Selecciona un perfil como activo (HU-10) */
+export function setActiveProfile(id: string): UserProfile | null {
+  const found = profiles.find((p) => p.id === id)
+  if (!found) return null
+  activeProfileId = id
+  return { ...found }
+}
+
+/** Crea un nuevo perfil vacío (HU-10) */
+export function createProfile(data: Partial<UserProfile>): UserProfile {
+  const newProfile: UserProfile = {
+    ...defaultProfile,
     ...data,
+    id: `usr_${String(Date.now()).slice(-6)}`,
+    createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }
-  return { ...profile }
+  profiles.push(newProfile)
+  return { ...newProfile }
 }
 
-/**
- * Reinicia el perfil a los valores por defecto
- */
+/** Actualiza el perfil activo */
+export function updateProfile(data: Partial<UserProfile>): UserProfile {
+  profiles = profiles.map((p) => {
+    if (p.id === activeProfileId) {
+      return { ...p, ...data, id: p.id, updatedAt: new Date().toISOString() }
+    }
+    return p
+  })
+  return getProfile()
+}
+
+/** Elimina un perfil por ID; no permite eliminar el último (HU-10) */
+export function deleteProfile(id: string): boolean {
+  if (profiles.length <= 1) return false
+  profiles = profiles.filter((p) => p.id !== id)
+  if (activeProfileId === id) {
+    activeProfileId = profiles[0].id
+  }
+  return true
+}
+
+/** Reinicia el perfil activo a valores por defecto */
 export function resetProfile(): UserProfile {
-  profile = { ...defaultProfile, updatedAt: new Date().toISOString() }
-  return { ...profile }
+  profiles = profiles.map((p) => {
+    if (p.id === activeProfileId) {
+      return { ...defaultProfile, id: p.id, createdAt: p.createdAt, updatedAt: new Date().toISOString() }
+    }
+    return p
+  })
+  return getProfile()
 }
 
 // ==================== OPERACIONES DE BITÁCORA ====================
 
-/**
- * Obtiene el historial de acciones ordenado por fecha descendente
- * (más recientes primero)
- */
 export function getActionLogs(): ActionLog[] {
   return [...actionLogs].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )
 }
 
-/**
- * Añade una nueva entrada al historial de acciones
- * Genera automáticamente el ID y la marca de tiempo
- */
-export function addActionLog(
-  log: Omit<ActionLog, "id" | "timestamp">
-): ActionLog {
+export function addActionLog(log: Omit<ActionLog, "id" | "timestamp">): ActionLog {
   const newLog: ActionLog = {
     ...log,
     id: `log_${String(actionLogs.length + 1).padStart(3, "0")}`,
@@ -152,7 +167,6 @@ export function addActionLog(
   actionLogs.push(newLog)
   return newLog
 }
-
 
 export function clearActionLogs(): void {
   actionLogs = []

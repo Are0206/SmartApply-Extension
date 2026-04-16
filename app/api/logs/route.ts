@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       action,
       details,
       fields: fields || [],
-      url: url || "",
+      url: url || "desconocido",
       status: status || "completado",
     })
 

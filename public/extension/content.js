@@ -170,8 +170,91 @@
     document.body.appendChild(container);
   }
 
+  // --- HU-15: recordar el ultimo campo donde se hizo clic derecho ---
+  // El menu contextual se construye en el service worker; cuando el usuario
+  // elige una opcion ya no tenemos garantia de cual era el campo "activo",
+  // asi que lo guardamos en el momento del contextmenu.
+  let lastRightClickedEl = null;
+  document.addEventListener(
+    "contextmenu",
+    (e) => {
+      const el = e.target;
+      const tag = el && el.tagName ? el.tagName.toLowerCase() : "";
+      if (tag === "input" || tag === "textarea") {
+        lastRightClickedEl = el;
+      } else {
+        lastRightClickedEl = null;
+      }
+    },
+    true
+  );
+
+  // Inserta un valor en un unico elemento, disparando los eventos que los
+  // frameworks (React, etc.) necesitan para detectar el cambio.
+  function setFieldValue(el, value) {
+    if (!el) return false;
+    el.focus();
+    el.value = value;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+    return true;
+  }
+
+  // Toast ligero reutilizable para mensajes de HU-14/HU-15.
+  function showSmartApplyToast(message) {
+    const prev = document.getElementById("smartapply-toast");
+    if (prev) prev.remove();
+    const toast = document.createElement("div");
+    toast.id = "smartapply-toast";
+    toast.textContent = message;
+    toast.style.position = "fixed";
+    toast.style.right = "16px";
+    toast.style.bottom = "16px";
+    toast.style.zIndex = "2147483647";
+    toast.style.maxWidth = "320px";
+    toast.style.background = "#0f172a";
+    toast.style.color = "#e2e8f0";
+    toast.style.border = "1px solid #334155";
+    toast.style.borderRadius = "8px";
+    toast.style.padding = "10px 12px";
+    toast.style.fontSize = "12px";
+    toast.style.fontFamily = "system-ui, -apple-system, Segoe UI, sans-serif";
+    toast.style.boxShadow = "0 12px 28px rgba(0,0,0,0.35)";
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3500);
+  }
+
   if (typeof chrome !== "undefined" && chrome.runtime) {
     chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+
+      // HU-15: insertar un solo campo en el input del clic derecho.
+      if (msg.action === "insertSingleField") {
+        let target = lastRightClickedEl;
+        // Respaldo: si por alguna razon se perdio la referencia, usar el
+        // elemento con foco si es editable.
+        if (!target) {
+          const active = document.activeElement;
+          const tag = active && active.tagName ? active.tagName.toLowerCase() : "";
+          if (tag === "input" || tag === "textarea") target = active;
+        }
+        if (!target) {
+          showSmartApplyToast("SmartApply: haz clic derecho sobre el campo de nuevo.");
+          sendResponse({ inserted: false });
+          return true;
+        }
+        setFieldValue(target, msg.value);
+        showSmartApplyToast(`SmartApply: campo completado.`);
+        sendResponse({ inserted: true, field: msg.field });
+        return true;
+      }
+
+      // HU-14 / HU-15: mostrar un aviso enviado desde el service worker.
+      if (msg.action === "smartapplyToast") {
+        showSmartApplyToast(msg.message || "SmartApply");
+        sendResponse({ ok: true });
+        return true;
+      }
+
       
       if (msg.action === "detectFields") {
         const inputs = Array.from(document.querySelectorAll('input, textarea')).filter(isValidField);
@@ -205,9 +288,16 @@
       }
 
       if (msg.action === "autofill") {
-        chrome.storage.local.get("autofillEnabled", (result) => {
+        chrome.storage.local.get(["autofillEnabled", "sessionLocked"], (result) => {
           const enabled = result.autofillEnabled !== false; 
-          
+
+          // HU-14: si la sesion esta bloqueada, no autocompletar.
+          if (result.sessionLocked) {
+            console.log("[SmartApply] Sesion bloqueada.");
+            sendResponse({ filled: 0, locked: true });
+            return;
+          }
+
           if (!enabled) {
             console.log("[SmartApply] Autocompletado desactivado.");
             sendResponse({ filled: 0, disabled: true });

@@ -31,6 +31,13 @@
     .toggle-switch::after { content: ''; position: absolute; width: 18px; height: 18px; background: #fff; border-radius: 50%; top: 2px; left: 2px; transition: left 0.3s; }
     .toggle-switch.on::after { left: 20px; }
     #log { max-height: 80px; overflow-y: auto; font-size: 10px; color: #94a3b8; margin-top: 6px; padding: 6px; background: #1e293b; border-radius: 4px; font-family: monospace; }
+    .session-input { width: 100%; background: #0f172a; border: 1px solid #334155; border-radius: 4px; padding: 6px 8px; color: #e2e8f0; font-size: 12px; margin: 6px 0; }
+    .btn-lock { background: transparent; color: #ef4444; border: 1px solid #ef4444; }
+    .lock-screen { text-align: center; padding: 16px 4px; }
+    .lock-screen h2 { font-size: 14px; color: #38bdf8; margin-bottom: 6px; }
+    .lock-screen p { font-size: 11px; color: #94a3b8; margin-bottom: 10px; }
+    .session-error { font-size: 11px; color: #ef4444; min-height: 14px; margin-top: 4px; }
+    .hidden { display: none !important; }
   </style>
 </head>
 <body>
@@ -38,7 +45,16 @@
     <div class="logo">SA</div>
     <div><h1>SmartApply</h1><p>Extension v1.0</p></div>
   </div>
-  <div class="content">
+  <!-- HU-14: Pantalla de bloqueo / inicio de sesion -->
+  <div class="content lock-screen hidden" id="lockScreen">
+    <h2 id="lockTitle">Extension bloqueada</h2>
+    <p id="lockSubtitle">Ingresa tu contrasena maestra para continuar.</p>
+    <input class="session-input" type="password" id="masterPassword" placeholder="Contrasena o PIN" autocomplete="off" />
+    <button class="btn btn-fill" id="unlockBtn">Desbloquear</button>
+    <div class="session-error" id="sessionError"></div>
+  </div>
+
+  <div class="content" id="mainApp">
     <div class="status">
       <div class="dot" id="dot"></div>
       <span id="statusTxt">Conectando...</span>
@@ -74,6 +90,8 @@
       <button class="btn btn-fill" id="confirmFillBtn">Confirmar y Llenar</button>
       <button class="btn btn-prev" id="cancelConfirmBtn">Cancelar</button>
     </div>
+
+    <button class="btn btn-lock" id="lockBtn">Cerrar sesion / Bloquear</button>
 
     <div id="log"></div>
   </div>

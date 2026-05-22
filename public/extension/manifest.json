@@ -3,8 +3,11 @@
   "name": "SmartApply - Autocompletar Formularios",
   "version": "1.0.0",
   "description": "Extension que detecta campos de formularios y autocompleta desde tu perfil profesional. Prueba de concepto.",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": ["activeTab", "storage", "scripting", "contextMenus"],
   "host_permissions": ["<all_urls>", "http://localhost:3000/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "SmartApply"

@@ -28,11 +28,26 @@ function detectFields() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  syncApiUrl();
+  initSession();
   loadProfile();
   setupEventListeners();
   loadToggleState();
   loadProfileSelector();
 });
+
+// Mantiene apiUrl en storage para que el service worker (HU-15) use la misma URL.
+function syncApiUrl() {
+  const input = document.getElementById("apiUrl");
+  if (!input) return;
+  chrome.storage.local.get("apiUrl").then((res) => {
+    if (res.apiUrl) input.value = res.apiUrl;
+  }).catch(() => {});
+  chrome.storage.local.set({ apiUrl: input.value }).catch(() => {});
+  input.addEventListener("change", () => {
+    chrome.storage.local.set({ apiUrl: input.value }).catch(() => {});
+  });
+}
 
 function setupEventListeners() {
   document.getElementById("previewBtn").addEventListener("click", handlePreview);
@@ -40,6 +55,106 @@ function setupEventListeners() {
   document.getElementById("confirmFillBtn").addEventListener("click", confirmAndFill);
   document.getElementById("cancelConfirmBtn").addEventListener("click", cancelConfirm);
   document.getElementById("toggleSwitch").addEventListener("click", handleToggle);
+  // HU-14
+  document.getElementById("lockBtn").addEventListener("click", handleLock);
+  document.getElementById("unlockBtn").addEventListener("click", handleUnlock);
+  document.getElementById("masterPassword").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") handleUnlock();
+  });
+}
+
+// ==================== SESION / SEGURIDAD (HU-14) ====================
+
+// Hash SHA-256 de la contrasena maestra (no se guarda en texto plano).
+async function hashPassword(text) {
+  const data = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// Decide que pantalla mostrar al abrir el popup.
+async function initSession() {
+  const { masterHash, sessionLocked } = await chrome.storage.local.get([
+    "masterHash",
+    "sessionLocked",
+  ]);
+
+  if (!masterHash) {
+    // Primer uso: pedir que defina la contrasena maestra.
+    showLockScreen({ firstTime: true });
+  } else if (sessionLocked) {
+    showLockScreen({ firstTime: false });
+  } else {
+    showMainApp();
+  }
+}
+
+function showLockScreen({ firstTime }) {
+  document.getElementById("mainApp").classList.add("hidden");
+  document.getElementById("lockScreen").classList.remove("hidden");
+  document.getElementById("sessionError").textContent = "";
+  document.getElementById("masterPassword").value = "";
+  if (firstTime) {
+    document.getElementById("lockTitle").textContent = "Configura tu acceso";
+    document.getElementById("lockSubtitle").textContent =
+      "Define una contrasena maestra o PIN para proteger tus datos.";
+    document.getElementById("unlockBtn").textContent = "Guardar y entrar";
+  } else {
+    document.getElementById("lockTitle").textContent = "Extension bloqueada";
+    document.getElementById("lockSubtitle").textContent =
+      "Ingresa tu contrasena maestra para continuar.";
+    document.getElementById("unlockBtn").textContent = "Desbloquear";
+  }
+  document.getElementById("masterPassword").focus();
+}
+
+function showMainApp() {
+  document.getElementById("lockScreen").classList.add("hidden");
+  document.getElementById("mainApp").classList.remove("hidden");
+}
+
+// Cerrar sesion / bloquear: desactiva autocompletado (HU-11) y bloquea.
+async function handleLock() {
+  await chrome.storage.local.set({ sessionLocked: true, autofillEnabled: false });
+  setToggleState(false);
+  addLog("Sesion cerrada. Autocompletado desactivado.");
+  const { masterHash } = await chrome.storage.local.get("masterHash");
+  showLockScreen({ firstTime: !masterHash });
+}
+
+// Desbloquear (o configurar por primera vez la contrasena).
+async function handleUnlock() {
+  const input = document.getElementById("masterPassword");
+  const errorEl = document.getElementById("sessionError");
+  const value = input.value.trim();
+
+  if (!value) {
+    errorEl.textContent = "Ingresa una contrasena.";
+    return;
+  }
+
+  const { masterHash } = await chrome.storage.local.get("masterHash");
+  const hash = await hashPassword(value);
+
+  if (!masterHash) {
+    // Primer uso: guardar la contrasena y entrar.
+    await chrome.storage.local.set({ masterHash: hash, sessionLocked: false });
+    addLog("Contrasena maestra configurada.");
+    showMainApp();
+    return;
+  }
+
+  if (hash === masterHash) {
+    await chrome.storage.local.set({ sessionLocked: false });
+    addLog("Sesion iniciada.");
+    showMainApp();
+  } else {
+    errorEl.textContent = "Contrasena incorrecta.";
+    input.value = "";
+    input.focus();
+  }
 }
 
 // ==================== SELECTOR DE PERFIL ACTIVO (HU-10) ====================
@@ -188,6 +303,13 @@ async function handlePreview() {
 
 async function handleAutofill() {
   try {
+    // HU-14: no autocompletar con la sesion bloqueada.
+    const sess = await chrome.storage.local.get("sessionLocked");
+    if (sess.sessionLocked) {
+      addLog("Sesion bloqueada. Inicia sesion para autocompletar.");
+      return;
+    }
+
     // Verificar si autocompletado está habilitado
     const result = await chrome.storage.local.get("autofillEnabled");
     const enabled = result.autofillEnabled !== false;
@@ -290,6 +412,13 @@ function showConfirmation(matched) {
 }
 
 async function confirmAndFill() {
+  // HU-14: no completar con la sesion bloqueada.
+  const sess = await chrome.storage.local.get("sessionLocked");
+  if (sess.sessionLocked) {
+    addLog("Sesion bloqueada. No se puede completar.");
+    return;
+  }
+
   // Verificar si autocompletado está habilitado
   const result = await chrome.storage.local.get("autofillEnabled");
   const enabled = result.autofillEnabled !== false;

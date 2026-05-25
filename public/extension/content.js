@@ -6,17 +6,164 @@
 
   // --- MAPEO INTELIGENTE DE CAMPOS DEL PERFIL A FORMULARIOS ---
   const fieldMappings = {
-    nombre: ["nombre", "first_name", "firstname", "first", "fname", "name", "given_name"],
-    apellido: ["apellido", "last_name", "lastname", "last", "lname", "surname", "apellidos"],
-    nombre_completo: ["nombre_completo", "fullname", "full_name", "full-name", "nombre completo", "namefull"],
-    email: ["email", "correo", "mail", "e-mail", "e_mail"],
-    telefono: ["telefono", "phone", "tel", "mobile", "cellphone", "phone_number", "cel", "telephone"],
-    titulo_profesional: ["titulo", "titulo_profesional", "job_title", "title", "profession", "cargo", "position", "puesto"],
-    ubicacion: ["ubicacion", "location", "ciudad", "city", "country", "pais", "address", "lugar", "state", "provincia"],
-    linkedin: ["linkedin", "linkedin_url", "linkedinurl"],
-    portfolio: ["portfolio", "portfolio_url", "web", "website", "url"],
-    resumen: ["resumen", "summary", "bio", "about", "description", "about_me", "biografía"],
-    habilidades: ["habilidades", "skills", "competencias"],
+    nombre: [
+      // Español
+      "nombre", "nombre de pila", "primer nombre", "nombres",
+      // Inglés
+      "first name", "first_name", "firstname", "given name", "given_name",
+      "fname", "name", "forename", "first", "your name",
+    ],
+  
+    apellido: [
+      // Español
+      "apellido", "apellidos", "primer apellido", "segundo apellido",
+      // Inglés
+      "last name", "last_name", "lastname", "surname", "family name",
+      "family_name", "lname", "last",
+    ],
+  
+    nombre_completo: [
+      // Español
+      "nombre completo", "nombre_completo", "nombre y apellido",
+      "nombre y apellidos", "nombre completo y apellido",
+      // Inglés
+      "full name", "full_name", "fullname", "complete name",
+      "your full name", "legal name", "candidate name", "applicant name",
+    ],
+  
+    email: [
+      // Español
+      "email", "correo", "correo electronico", "correo electrónico",
+      "e-mail", "e_mail", "dirección de correo", "direccion de correo",
+      // Inglés
+      "email address", "email_address", "mail", "electronic mail",
+      "work email", "personal email", "contact email", "your email",
+    ],
+  
+    telefono: [
+      // Español
+      "teléfono", "telefono", "celular", "móvil", "movil", "cel",
+      "número de teléfono", "numero de telefono", "número celular",
+      "teléfono móvil", "telefono movil", "teléfono de contacto",
+      // Inglés
+      "phone", "phone number", "phone_number", "telephone", "mobile",
+      "cell", "cell phone", "cellphone", "contact number", "mobile number",
+      "work phone", "home phone",
+    ],
+  
+    titulo_profesional: [
+      // Español
+      "título", "titulo", "título profesional", "titulo profesional",
+      "cargo", "puesto", "ocupación", "ocupacion", "profesión", "profesion",
+      "denominación del puesto", "denominacion del puesto",
+      // Inglés
+      "job title", "job_title", "title", "position", "role",
+      "profession", "occupation", "headline", "current title",
+      "current position", "current role", "professional title",
+      "work title", "desired title", "desired position",
+    ],
+  
+    ubicacion: [
+      // Español
+      "ubicación", "ubicacion", "ciudad", "país", "pais",
+      "provincia", "estado", "dirección", "direccion", "localidad",
+      "municipio", "región", "region", "código postal", "codigo postal",
+      // Inglés
+      "location", "city", "country", "state", "address",
+      "region", "place", "zip", "zip code", "postal code",
+      "current location", "city and country", "where are you based",
+    ],
+  
+    linkedin: [
+      // Español
+      "linkedin", "linkedin url", "linkedin_url", "perfil linkedin",
+      "perfil de linkedin", "url de linkedin", "enlace linkedin",
+      // Inglés
+      "linkedin profile", "linkedin profile url", "linkedinurl",
+      "linkedin link", "linkedin page", "linkedin handle",
+    ],
+  
+    portfolio: [
+      // Español
+      "portfolio", "portafolio", "sitio web", "página web", "pagina web",
+      "sitio personal", "web personal", "enlace web", "url personal",
+      // Inglés
+      "portfolio url", "website", "web", "personal website",
+      "personal site", "portfolio_url", "url", "site", "your website",
+      "work samples", "online portfolio",
+    ],
+  
+    resumen: [
+      // Español
+      "resumen", "resumen profesional", "sobre mí", "sobre mi",
+      "acerca de mí", "acerca de mi", "biografía", "biografia",
+      "descripción", "descripcion", "presentación", "presentacion",
+      "perfil profesional", "extracto",
+      // Inglés
+      "summary", "bio", "about", "about me", "description",
+      "professional summary", "profile", "about_me", "biography",
+      "tell us about yourself", "introduce yourself", "cover letter",
+      "personal statement", "career summary", "background",
+    ],
+  
+    habilidades: [
+      // Español
+      "habilidades", "competencias", "destrezas", "aptitudes",
+      "habilidades técnicas", "habilidades tecnicas", "conocimientos",
+      "tecnologías", "tecnologias", "herramientas",
+      // Inglés
+      "skills", "abilities", "competencies", "expertise",
+      "technical skills", "key skills", "core skills", "tools",
+      "technologies", "tech stack", "areas of expertise",
+    ],
+  
+    experiencia: [
+      // Español
+      "experiencia", "experiencia laboral", "años de experiencia",
+      "anos de experiencia", "experiencia profesional",
+      // Inglés
+      "experience", "work experience", "years of experience",
+      "professional experience", "relevant experience",
+    ],
+  
+    educacion: [
+      // Español
+      "educación", "educacion", "estudios", "formación", "formacion",
+      "título académico", "titulo academico", "carrera", "universidad",
+      "nivel educativo", "grado",
+      // Inglés
+      "education", "degree", "university", "college", "school",
+      "academic background", "qualification", "highest degree",
+      "field of study", "major",
+    ],
+  
+    salario: [
+      // Español
+      "salario", "salario esperado", "pretensión salarial",
+      "pretension salarial", "remuneración", "remuneracion",
+      "sueldo", "sueldo esperado", "expectativa salarial",
+      // Inglés
+      "salary", "expected salary", "salary expectation",
+      "desired salary", "compensation", "pay", "wage",
+      "salary range", "current salary",
+    ],
+  
+    disponibilidad: [
+      // Español
+      "disponibilidad", "disponibilidad para empezar",
+      "fecha de inicio", "cuando puedes empezar",
+      // Inglés
+      "availability", "available from", "start date",
+      "notice period", "when can you start", "earliest start date",
+    ],
+  
+    github: [
+      // Español
+      "github", "perfil github", "url github", "enlace github",
+      // Inglés
+      "github", "github profile", "github url", "github link",
+      "github handle", "github username",
+    ],
   };
 
   const allowedInputTypes = ["text", "email", "tel", "number", "url", ""];
@@ -45,6 +192,15 @@
     return "";
   }
 
+   function normalizeText(text) {
+    return text
+    .toLowerCase()
+    .normalize("NFD")                        // separa letras de acentos
+    .replace(/[\u0300-\u036f]/g, "")         // elimina los acentos
+    .replace(/[^a-z0-9\s]/g, " ")           // reemplaza símbolos por espacio
+    .replace(/\s+/g, " ")                   // colapsa espacios múltiples
+    .trim();
+}
   // Función mejorada para detectar qué campo es
   function identifyField(input) {
     const name = (input.name || "").toLowerCase();
@@ -52,9 +208,11 @@
     const placeholder = (input.placeholder || "").toLowerCase();
     const ariaLabel = (input.getAttribute("aria-label") || "").toLowerCase();
     const labelText = getLabelText(input);
-    
+
     // Crear palabras individuales para búsqueda más inteligente
-    const allText = [name, id, placeholder, ariaLabel, labelText].join(" ");
+    const allText = normalizeText(
+      [name, id, placeholder, ariaLabel, labelText].join(" ")
+    );
     const words = allText.split(/[\s_-]+/).filter(w => w.length > 0);
     
     // Buscar coincidencias con los mappings, priorizando términos más específicos

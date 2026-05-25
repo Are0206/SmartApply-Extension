@@ -2,13 +2,13 @@
 const API = () => document.getElementById("apiUrl").value || "http://localhost:3000";
 
 let currentMatched = {};
+
 function detectFields() {
   const inputs = document.querySelectorAll('input, textarea, select');
   const fields = [];
   inputs.forEach(el => {
     let fieldName = el.name || el.id || '';
     if (!fieldName) {
-      // Buscar label asociado
       const label = document.querySelector(`label[for="${el.id}"]`);
       if (label) {
         fieldName = label.textContent.toLowerCase().trim();
@@ -61,7 +61,6 @@ function setupEventListeners() {
   document.getElementById("masterPassword").addEventListener("keydown", (e) => {
     if (e.key === "Enter") handleUnlock();
   });
-  // Edit / Delete buttons in the popup
   const editBtn = document.getElementById("editBtn");
   const deleteBtn = document.getElementById("deleteBtn");
   const saveEditBtn = document.getElementById("saveEditBtn");
@@ -78,7 +77,6 @@ function setupEventListeners() {
 
 // ==================== SESION / SEGURIDAD (HU-14) ====================
 
-// Hash SHA-256 de la contrasena maestra (no se guarda en texto plano).
 async function hashPassword(text) {
   const data = new TextEncoder().encode(text);
   const digest = await crypto.subtle.digest("SHA-256", data);
@@ -87,15 +85,12 @@ async function hashPassword(text) {
     .join("");
 }
 
-// Decide que pantalla mostrar al abrir el popup.
 async function initSession() {
   const { masterHash, sessionLocked } = await chrome.storage.local.get([
     "masterHash",
     "sessionLocked",
   ]);
-
   if (!masterHash) {
-    // Primer uso: pedir que defina la contrasena maestra.
     showLockScreen({ firstTime: true });
   } else if (sessionLocked) {
     showLockScreen({ firstTime: false });
@@ -128,7 +123,6 @@ function showMainApp() {
   document.getElementById("mainApp").classList.remove("hidden");
 }
 
-// Cerrar sesion / bloquear: desactiva autocompletado (HU-11) y bloquea.
 async function handleLock() {
   await chrome.storage.local.set({ sessionLocked: true, autofillEnabled: false });
   setToggleState(false);
@@ -137,7 +131,6 @@ async function handleLock() {
   showLockScreen({ firstTime: !masterHash });
 }
 
-// Desbloquear (o configurar por primera vez la contrasena).
 async function handleUnlock() {
   const input = document.getElementById("masterPassword");
   const errorEl = document.getElementById("sessionError");
@@ -152,7 +145,6 @@ async function handleUnlock() {
   const hash = await hashPassword(value);
 
   if (!masterHash) {
-    // Primer uso: guardar la contrasena y entrar.
     await chrome.storage.local.set({ masterHash: hash, sessionLocked: false });
     addLog("Contrasena maestra configurada.");
     showMainApp();
@@ -200,8 +192,8 @@ async function loadProfileSelector() {
         });
         const result = await res.json();
         if (result.success) {
-          addLog(`Perfil activo cambiado`);
-          loadProfile(); // Recargar datos del perfil activo en la card
+          addLog("Perfil activo cambiado");
+          loadProfile();
         }
       } catch (err) {
         addLog("Error al cambiar perfil: " + err.message);
@@ -219,22 +211,36 @@ async function openEditForm() {
   if (!select) return;
   const id = select.value;
   try {
-    // Fetch list and find locally to avoid issues with dynamic route mismatch
     const res = await fetch(`${API()}/api/profiles`);
     const list = await res.json();
     if (!list.success) return addLog("No se pudieron obtener perfiles");
     const p = (list.data || []).find(x => x.id === id);
     if (!p) return addLog("Perfil no encontrado para editar");
+
     const container = document.getElementById("editFields");
     container.innerHTML = [
-      ["nombre", "Nombre", p.nombre],
-      ["apellido", "Apellido", p.apellido],
-      ["email", "Email", p.email],
-      ["telefono", "Telefono", p.telefono],
-      ["titulo_profesional", "Titulo", p.titulo_profesional]
+      ["nombre",             "Nombre",              p.nombre],
+      ["apellido",           "Apellido",             p.apellido],
+      ["email",              "Email",                p.email],
+      ["telefono",           "Telefono",             p.telefono],
+      ["titulo_profesional", "Titulo profesional",   p.titulo_profesional],
+      ["ubicacion",          "Ubicacion",            p.ubicacion],
+      ["linkedin",           "LinkedIn URL",         p.linkedin],
+      ["portfolio",          "Portfolio / Web",      p.portfolio],
+      ["github",             "GitHub URL",           p.github],
+      ["experiencia",        "Anos de experiencia",  p.experiencia],
+      ["educacion",          "Educacion",            p.educacion],
+      ["salario",            "Salario esperado",     p.salario],
+      ["disponibilidad",     "Disponibilidad",       p.disponibilidad],
+      ["resumen",            "Resumen profesional",  p.resumen],
+      ["habilidades",        "Habilidades (separadas por coma)", Array.isArray(p.habilidades) ? p.habilidades.join(", ") : (p.habilidades || "")],
     ].map(([key, label, value]) =>
-      `<div class=\"row\" style=\"align-items:center;gap:8px;\"><span class=\"lbl\">${label}</span><input data-key=\"${key}\" class=\"session-input\" value=\"${(value||"").replace(/\"/g,'&quot;')}\" /></div>`
+      `<div class="row" style="flex-direction:column;gap:2px;padding:4px 0;">
+        <span class="lbl">${label}</span>
+        <input data-key="${key}" class="session-input" value="${(value || "").toString().replace(/"/g, "&quot;")}" />
+      </div>`
     ).join("");
+
     document.getElementById("editCard").style.display = "block";
     document.getElementById("editCard").scrollIntoView({ behavior: "smooth", block: "end" });
   } catch (err) {
@@ -250,7 +256,6 @@ async function saveProfileEdit() {
   const payload = {};
   inputs.forEach(inp => { payload[inp.dataset.key] = inp.value; });
   try {
-    // Use fallback POST /api/profiles/update to avoid dynamic route issues
     const res = await fetch(`${API()}/api/profiles/update`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -267,12 +272,9 @@ async function saveProfileEdit() {
     }
   } catch (err) {
     addLog("Error al guardar perfil: " + err.message);
-    // Fallback: aplicar cambio localmente en el selector para mostrar al usuario el efecto
     try {
-      const select = document.getElementById("profileSelect");
       const option = select.querySelector(`option[value="${id}"]`);
       if (option) {
-        // actualizar texto de la opción con nuevo nombre si existe
         const nombre = payload.nombre || option.textContent.split(' — ')[0] || 'Perfil';
         option.textContent = `${nombre} — (local)`;
       }
@@ -283,11 +285,25 @@ async function saveProfileEdit() {
   }
 }
 
-// Crear nuevo perfil (UI + POST al backend). Si falla el POST, crea un perfil temporal en el selector.
 async function createNewProfile() {
-  const nombre = prompt("Nombre para el nuevo perfil:", "Nuevo");
+  const nombre = prompt("Nombre:", "");
   if (nombre === null) return;
-  const payload = { nombre, apellido: "", email: "", telefono: "", titulo_profesional: "" };
+  const apellido  = prompt("Apellido:", "");
+  const email     = prompt("Email:", "");
+  const telefono  = prompt("Telefono:", "");
+  const titulo    = prompt("Titulo profesional:", "");
+
+  const payload = {
+    nombre,
+    apellido:           apellido || "",
+    email:              email    || "",
+    telefono:           telefono || "",
+    titulo_profesional: titulo   || "",
+    ubicacion: "", linkedin: "", portfolio: "", github: "",
+    experiencia: "", educacion: "", salario: "",
+    disponibilidad: "", resumen: "", habilidades: [],
+  };
+
   try {
     const res = await fetch(`${API()}/api/profiles`, {
       method: "POST",
@@ -298,25 +314,21 @@ async function createNewProfile() {
     if (data.success && data.data) {
       addLog("Perfil creado");
       await loadProfileSelector();
-      const select = document.getElementById("profileSelect");
-      select.value = data.data.id;
+      document.getElementById("profileSelect").value = data.data.id;
       await loadProfile();
       return;
     }
-    throw new Error(data.message || 'Error desconocido');
+    throw new Error(data.message || "Error desconocido");
   } catch (err) {
-    addLog("No se pudo crear en el backend, creando localmente.");
-    // Fallback local: agregar opción temporal
-    try {
-      const id = `local_${String(Date.now()).slice(-6)}`;
-      const select = document.getElementById("profileSelect");
-      const opt = document.createElement('option');
-      opt.value = id;
-      opt.textContent = `${nombre} — (local)`;
-      select.appendChild(opt);
-      select.value = id;
-      await loadProfile();
-    } catch (e) { console.error(e); }
+    addLog("No se pudo crear en el backend.");
+    const id = `local_${String(Date.now()).slice(-6)}`;
+    const select = document.getElementById("profileSelect");
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = `${nombre} ${apellido || ""} — (local)`;
+    select.appendChild(opt);
+    select.value = id;
+    await loadProfile();
   }
 }
 
@@ -345,11 +357,11 @@ async function handleDeleteProfile() {
 async function loadToggleState() {
   try {
     const result = await chrome.storage.local.get("autofillEnabled");
-    const enabled = result.autofillEnabled !== false; // Default to true
+    const enabled = result.autofillEnabled !== false;
     setToggleState(enabled);
   } catch (err) {
     console.error("Error loading toggle state:", err);
-    setToggleState(true); // Default to enabled
+    setToggleState(true);
   }
 }
 
@@ -367,17 +379,16 @@ async function handleToggle() {
     const result = await chrome.storage.local.get("autofillEnabled");
     const currentState = result.autofillEnabled !== false;
     const newState = !currentState;
-    
     await chrome.storage.local.set({ autofillEnabled: newState });
     setToggleState(newState);
-    
-    const status = newState ? "Autocompletado activado" : "Autocompletado desactivado";
-    addLog(status);
+    addLog(newState ? "Autocompletado activado" : "Autocompletado desactivado");
   } catch (err) {
     addLog("Error: No se pudo cambiar el estado");
     console.error("Error handling toggle:", err);
   }
 }
+
+// ==================== PERFIL ====================
 
 async function loadProfile() {
   try {
@@ -386,46 +397,58 @@ async function loadProfile() {
     if (data.success) {
       const p = data.data;
       document.getElementById("profileFields").innerHTML = [
-        ["Nombre", `${p.nombre} ${p.apellido}`],
-        ["Email", p.email],
-        ["Telefono", p.telefono],
-        ["Titulo", p.titulo_profesional],
-      ].map(([l, v]) => `<div class="row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`).join("");
+        ["Nombre",       `${p.nombre} ${p.apellido}`],
+        ["Email",        p.email],
+        ["Telefono",     p.telefono],
+        ["Titulo",       p.titulo_profesional],
+        ["Ubicacion",    p.ubicacion],
+        ["LinkedIn",     p.linkedin],
+        ["Portfolio",    p.portfolio],
+        ["GitHub",       p.github],
+        ["Experiencia",  p.experiencia],
+        ["Educacion",    p.educacion],
+        ["Salario esp.", p.salario],
+        ["Disponib.",    p.disponibilidad],
+        ["Resumen",      p.resumen],
+        ["Habilidades",  Array.isArray(p.habilidades) ? p.habilidades.join(", ") : p.habilidades],
+      ]
+      .filter(([, v]) => v)
+      .map(([l, v]) => `<div class="row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`)
+      .join("");
+
       document.getElementById("dot").className = "dot";
       document.getElementById("statusTxt").textContent = "Conectado";
     }
   } catch {
     document.getElementById("dot").className = "dot off";
     document.getElementById("statusTxt").textContent = "Sin conexion";
-    document.getElementById("profileFields").innerHTML = '<p style="font-size:11px;color:#ef4444;">No se pudo conectar</p>';
+    document.getElementById("profileFields").innerHTML =
+      '<p style="font-size:11px;color:#ef4444;">No se pudo conectar</p>';
   }
 }
+
+// ==================== PREVIEW ====================
 
 async function handlePreview() {
   try {
     addLog("Preview iniciado");
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return addLog("No hay pestaña activa");
-    
-    // Inyectar el content script si no está inyectado
+    if (!tab?.id) return addLog("No hay pestana activa");
+
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["content.js"]
-      });
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
     } catch (injectionErr) {
       console.warn("Content script ya estaba inyectado o no se pudo inyectar", injectionErr);
     }
-    
+
     let result;
     try {
       result = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
     } catch (msgErr) {
-      addLog("Error: No se pudo comunicar con la página. Intenta recargar la pestaña.");
-      console.error("Send message error:", msgErr);
+      addLog("Error: No se pudo comunicar con la pagina. Intenta recargar la pestana.");
       return;
     }
-    
+
     const fields = result?.fields || [];
     const res = await fetch(`${API()}/api/profile`);
     const profile = (await res.json()).data;
@@ -442,94 +465,84 @@ async function handlePreview() {
   }
 }
 
+// ==================== AUTOFILL ====================
+
 async function handleAutofill() {
   try {
-    // HU-14: no autocompletar con la sesion bloqueada.
     const sess = await chrome.storage.local.get("sessionLocked");
     if (sess.sessionLocked) {
       addLog("Sesion bloqueada. Inicia sesion para autocompletar.");
       return;
     }
 
-    // Verificar si autocompletado está habilitado
     const result = await chrome.storage.local.get("autofillEnabled");
     const enabled = result.autofillEnabled !== false;
-    
     if (!enabled) {
-      addLog("Autocompletado está desactivado. Actívalo para continuar.");
+      addLog("Autocompletado esta desactivado. Activalo para continuar.");
       document.getElementById("statusTxt").textContent = "Autocompletado desactivado";
       return;
     }
-    
+
     addLog("Autocompletar iniciado");
     document.getElementById("statusTxt").textContent = "Autocompletando...";
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab?.id) return addLog("No hay pestaña activa");
-    
-    // Inyectar el content script si no está inyectado
+    if (!tab?.id) return addLog("No hay pestana activa");
+
     try {
-      await chrome.scripting.executeScript({
-        target: { tabId: tab.id },
-        files: ["content.js"]
-      });
+      await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
     } catch (injectionErr) {
       console.warn("Content script ya estaba inyectado o no se pudo inyectar", injectionErr);
     }
-    
+
     let result2;
     try {
       result2 = await chrome.tabs.sendMessage(tab.id, { action: "detectFields" });
     } catch (msgErr) {
-      addLog("Error: No se pudo comunicar con la página. Intenta recargar la pestaña.");
-      document.getElementById("statusTxt").textContent = "Error de comunicación";
-      console.error("Send message error:", msgErr);
+      addLog("Error: No se pudo comunicar con la pagina. Intenta recargar la pestana.");
+      document.getElementById("statusTxt").textContent = "Error de comunicacion";
       return;
     }
-    
+
     const fields = result2?.fields || [];
     if (!fields.length) {
-      addLog("No se encontraron campos en la página.");
+      addLog("No se encontraron campos en la pagina.");
       document.getElementById("statusTxt").textContent = "No se encontraron campos";
       return;
     }
-    console.log("[SmartApply] Campos detectados en la página:", fields.map(f => f.name));
+
+    console.log("[SmartApply] Campos detectados en la pagina:", fields.map(f => f.name));
     const res = await fetch(`${API()}/api/profile`);
     const profile = (await res.json()).data;
     const mapping = buildMapping(profile);
     const matched = {};
-    
-    // Mapear SOLO los campos que están realmente en la página
+
     fields.forEach(f => {
       if (mapping[f.name]) {
         matched[f.name] = mapping[f.name];
-        console.log(`[SmartApply] ✓ Campo "${f.name}" detectado y mapeado`);
+        console.log(`[SmartApply] Campo "${f.name}" detectado y mapeado`);
       }
     });
-    
-    // SOLO agregar nombre_completo como fallback si:
-    // 1. La página tiene un campo "nombre_completo" detectado, O
-    // 2. La página NO tiene "nombre" ni "apellido" pero tenemos datos para llenar
-    const tieneNombreCompleto = fields.some(f => f.name === "nombre_completo");
+
+    const tieneNombreCompleto  = fields.some(f => f.name === "nombre_completo");
     const tieneNombreOApellido = fields.some(f => f.name === "nombre" || f.name === "apellido");
-    
+
     if (tieneNombreCompleto && !matched.nombre_completo) {
-      // La página tiene nombre_completo, asegurarse de rellenarlo
       matched.nombre_completo = `${profile.nombre} ${profile.apellido}`;
       console.log("[SmartApply] Campo nombre_completo agregado");
     } else if (!tieneNombreOApellido && !tieneNombreCompleto && Object.keys(matched).length === 0) {
-      // No detectó nada de nombre, agregar nombre_completo como último recurso
       matched.nombre_completo = `${profile.nombre} ${profile.apellido}`;
-      console.log("[SmartApply] Agregando nombre_completo como último recurso");
+      console.log("[SmartApply] Agregando nombre_completo como ultimo recurso");
     }
-    
-    console.log("[SmartApply] Campos finales para rellenar:", Object.keys(matched));
 
+    console.log("[SmartApply] Campos finales para rellenar:", Object.keys(matched));
     currentMatched = matched;
+
     if (!Object.keys(matched).length) {
       addLog("No se detectaron coincidencias entre campos y perfil.");
       document.getElementById("statusTxt").textContent = "No se encontraron coincidencias";
       return;
     }
+
     showConfirmation(matched);
     document.getElementById("statusTxt").textContent = "Datos listos para confirmar";
     addLog(`Campos detectados: ${Object.keys(matched).length}`);
@@ -544,7 +557,8 @@ function showConfirmation(matched) {
     const value = typeof info === "object" && info !== null ? info.value : info;
     return `<div class="row">
       <span class="lbl">${name}:</span>
-      <input type="text" class="confirm-input" data-field="${name}" value="${value || ""}" style="flex:1; margin-left:5px; padding:2px; font-size:11px; background:#334155; border:1px solid #475569; color:#e2e8f0; border-radius:3px;">
+      <input type="text" class="confirm-input" data-field="${name}" value="${value || ""}"
+        style="flex:1;margin-left:5px;padding:2px;font-size:11px;background:#334155;border:1px solid #475569;color:#e2e8f0;border-radius:3px;">
     </div>`;
   }).join("");
   const card = document.getElementById("confirmCard");
@@ -553,35 +567,27 @@ function showConfirmation(matched) {
 }
 
 async function confirmAndFill() {
-  // HU-14: no completar con la sesion bloqueada.
   const sess = await chrome.storage.local.get("sessionLocked");
   if (sess.sessionLocked) {
     addLog("Sesion bloqueada. No se puede completar.");
     return;
   }
 
-  // Verificar si autocompletado está habilitado
   const result = await chrome.storage.local.get("autofillEnabled");
   const enabled = result.autofillEnabled !== false;
-  
   if (!enabled) {
-    addLog("Autocompletado está desactivado. No se puede completar.");
+    addLog("Autocompletado esta desactivado. No se puede completar.");
     return;
   }
-  
+
   const inputs = document.querySelectorAll("#confirmFields .confirm-input");
   const data = {};
-  inputs.forEach(input => {
-    data[input.dataset.field] = input.value;
-  });
-  
-  // Obtener perfil para incluir nombre y apellido por separado
+  inputs.forEach(input => { data[input.dataset.field] = input.value; });
+
   try {
     const res = await fetch(`${API()}/api/profile`);
     const profile = (await res.json()).data;
-    
-    // Siempre agregar nombre y apellido por separado para soportar nombre_completo
-    data.nombre = profile.nombre;
+    data.nombre   = profile.nombre;
     data.apellido = profile.apellido;
   } catch (err) {
     console.error("Error obtener perfil:", err);
@@ -590,22 +596,15 @@ async function confirmAndFill() {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const result = await chrome.tabs.sendMessage(tab.id, { action: "autofill", data, confirm: true });
-    let filledFields = result?.fields || [];
-    
-    // Remover duplicados de filledFields
-    filledFields = [...new Set(filledFields)];
-    
+    let filledFields = [...new Set(result?.fields || [])];
+
     addLog(`Autocompletado confirmado: ${filledFields.length} campos`);
     if (filledFields.length) {
       addLog(`Campos completados: ${filledFields.join(", ")}`);
       try {
-        const fullUrl = tab.url;
+        const fullUrl  = tab.url;
         const hostname = new URL(tab.url).hostname;
-        const now = new Date().toLocaleString("es-ES", {
-          dateStyle: "short",
-          timeStyle: "short",
-        });
-
+        const now = new Date().toLocaleString("es-ES", { dateStyle: "short", timeStyle: "short" });
         await fetch(`${API()}/api/logs`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -632,55 +631,75 @@ function cancelConfirm() {
   document.getElementById("confirmCard").style.display = "none";
 }
 
+// ==================== MAPPING ====================
+
 function buildMapping(p) {
-  const fullName = `${p.nombre} ${p.apellido}`;
+  const fullName       = `${p.nombre} ${p.apellido}`.trim();
+  const habilidadesStr = Array.isArray(p.habilidades)
+    ? p.habilidades.join(", ")
+    : (p.habilidades || "");
+
   return {
-    // Nombre individual
-    nombre: p.nombre, 
-    first_name: p.nombre, 
-    firstname: p.nombre,
-    first: p.nombre,
-    
+    // Nombre
+    nombre: p.nombre, first_name: p.nombre, firstname: p.nombre,
+    first: p.nombre, fname: p.nombre, name: p.nombre,
+
     // Apellido
-    apellido: p.apellido, 
-    last_name: p.apellido,
-    lastname: p.apellido,
-    last: p.apellido,
-    
+    apellido: p.apellido, last_name: p.apellido, lastname: p.apellido,
+    last: p.apellido, lname: p.apellido, surname: p.apellido,
+
     // Nombre completo
-    nombre_completo: fullName,
-    fullname: fullName,
-    full_name: fullName,
-    "full-name": fullName,
-    
+    nombre_completo: fullName, fullname: fullName,
+    full_name: fullName, "full-name": fullName,
+
     // Email
-    email: p.email, 
-    correo: p.email, 
-    
+    email: p.email, correo: p.email, mail: p.email,
+
     // Teléfono
-    telefono: p.telefono, 
-    phone: p.telefono,
-    
-    // Otros
-    linkedin: p.linkedin, 
-    portfolio: p.portfolio, 
-    website: p.portfolio,
-    ubicacion: p.ubicacion, 
-    location: p.ubicacion, 
-    titulo: p.titulo_profesional,
-    title: p.titulo_profesional, 
-    resumen: p.resumen, 
-    summary: p.resumen, 
-    mensaje: p.resumen,
-    habilidades: (p.habilidades || []).join(", "), 
-    skills: (p.habilidades || []).join(", "),
+    telefono: p.telefono, phone: p.telefono, tel: p.telefono,
+    mobile: p.telefono, celular: p.telefono,
+
+    // Título profesional
+    titulo: p.titulo_profesional, titulo_profesional: p.titulo_profesional,
+    title: p.titulo_profesional, job_title: p.titulo_profesional,
+    position: p.titulo_profesional, cargo: p.titulo_profesional,
+
+    // Ubicación
+    ubicacion: p.ubicacion, location: p.ubicacion,
+    ciudad: p.ubicacion, city: p.ubicacion,
+
+    // LinkedIn
+    linkedin: p.linkedin, linkedin_url: p.linkedin,
+
+    // Portfolio
+    portfolio: p.portfolio, portfolio_url: p.portfolio,
+    website: p.portfolio, web: p.portfolio, url: p.portfolio,
+
+    // GitHub
+    github: p.github, github_url: p.github,
+
+    // Resumen
+    resumen: p.resumen, summary: p.resumen,
+    bio: p.resumen, about: p.resumen, about_me: p.resumen,
+
+    // Habilidades
+    habilidades: habilidadesStr, skills: habilidadesStr,
+    competencias: habilidadesStr,
+
+    // Campos nuevos
+    experiencia: p.experiencia, experience: p.experiencia,
+    educacion: p.educacion, education: p.educacion,
+    salario: p.salario, salary: p.salario,
+    disponibilidad: p.disponibilidad, availability: p.disponibilidad,
   };
 }
 
+// ==================== LOG ====================
+
 function addLog(msg) {
   const el = document.getElementById("log");
-  const t = new Date().toLocaleTimeString("es");
-  const d = document.createElement("div");
+  const t  = new Date().toLocaleTimeString("es");
+  const d  = document.createElement("div");
   d.textContent = `[${t}] ${msg}`;
   el.prepend(d);
 }

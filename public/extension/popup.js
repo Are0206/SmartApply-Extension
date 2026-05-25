@@ -50,6 +50,7 @@ function syncApiUrl() {
 }
 
 function setupEventListeners() {
+  document.getElementById("syncBtn").addEventListener("click", handleSync);
   document.getElementById("previewBtn").addEventListener("click", handlePreview);
   document.getElementById("autofillBtn").addEventListener("click", handleAutofill);
   document.getElementById("confirmFillBtn").addEventListener("click", confirmAndFill);
@@ -388,42 +389,164 @@ async function handleToggle() {
   }
 }
 
+// ==================== SINCRONIZACION MANUAL (HU-16) ====================
+
+async function handleSync() {
+  const btn = document.getElementById("syncBtn");
+  const msg = document.getElementById("syncMsg");
+
+  btn.disabled = true;
+  btn.textContent = "Sincronizando...";
+  msg.className = "sync-msg hidden";
+
+  try {
+    const res = await fetch(`${API()}/api/profile`);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error("API error");
+
+    await Promise.allSettled([loadProfile(), loadProfileSelector()]);
+    msg.textContent = "Datos actualizados";
+    msg.className = "sync-msg ok";
+    addLog("Sincronizacion manual exitosa");
+  } catch {
+    await loadProfile();
+    msg.textContent = "Error de conexion";
+    msg.className = "sync-msg err";
+    addLog("Error de sincronizacion manual");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "↻ Sincronizar";
+    setTimeout(() => { msg.className = "sync-msg hidden"; }, 3000);
+  }
+}
+
+// ==================== CACHE OFFLINE / CIFRADO (HU-NF-04) ====================
+
+async function getEncryptionKey() {
+  const { masterHash } = await chrome.storage.local.get("masterHash");
+  if (!masterHash) return null;
+  // SHA-256 produce 64 hex chars = 32 bytes → clave AES-256 perfecta
+  const bytes = new Uint8Array(masterHash.match(/.{2}/g).map(b => parseInt(b, 16)));
+  return crypto.subtle.importKey("raw", bytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+}
+
+async function encryptData(obj, key) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encoded = new TextEncoder().encode(JSON.stringify(obj));
+  const cipher = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, encoded);
+  return {
+    iv: btoa(String.fromCharCode(...iv)),
+    ct: btoa(String.fromCharCode(...new Uint8Array(cipher)))
+  };
+}
+
+async function decryptData(stored, key) {
+  const iv = Uint8Array.from(atob(stored.iv), c => c.charCodeAt(0));
+  const ct = Uint8Array.from(atob(stored.ct), c => c.charCodeAt(0));
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  return JSON.parse(new TextDecoder().decode(plain));
+}
+
+async function saveCachedProfile(profile) {
+  try {
+    const key = await getEncryptionKey();
+    const value = key ? await encryptData(profile, key) : profile;
+    await chrome.storage.local.set({ cachedProfile: value, cachedEncrypted: !!key, cachedAt: new Date().toISOString() });
+  } catch { /* no bloquear flujo principal si el cache falla */ }
+}
+
+async function loadCachedProfile() {
+  const { cachedProfile, cachedEncrypted } = await chrome.storage.local.get(["cachedProfile", "cachedEncrypted"]);
+  if (!cachedProfile) return null;
+  try {
+    if (cachedEncrypted) {
+      const key = await getEncryptionKey();
+      if (!key) return null;
+      return await decryptData(cachedProfile, key);
+    }
+    return cachedProfile;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchProfile() {
+  try {
+    const res = await fetch(`${API()}/api/profile`);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const data = await res.json();
+    if (!data.success) throw new Error("API error");
+    return data.data;
+  } catch {
+    return await loadCachedProfile();
+  }
+}
+
+function renderProfileData(p) {
+  document.getElementById("profileFields").innerHTML = [
+    ["Nombre",       `${p.nombre} ${p.apellido}`],
+    ["Email",        p.email],
+    ["Telefono",     p.telefono],
+    ["Titulo",       p.titulo_profesional],
+    ["Ubicacion",    p.ubicacion],
+    ["LinkedIn",     p.linkedin],
+    ["Portfolio",    p.portfolio],
+    ["GitHub",       p.github],
+    ["Experiencia",  p.experiencia],
+    ["Educacion",    p.educacion],
+    ["Salario esp.", p.salario],
+    ["Disponib.",    p.disponibilidad],
+    ["Resumen",      p.resumen],
+    ["Habilidades",  Array.isArray(p.habilidades) ? p.habilidades.join(", ") : p.habilidades],
+  ]
+  .filter(([, v]) => v)
+  .map(([l, v]) => `<div class="row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`)
+  .join("");
+}
+
+function setConnectionStatus(mode) {
+  const dot   = document.getElementById("dot");
+  const txt   = document.getElementById("statusTxt");
+  const badge = document.getElementById("offlineBadge");
+  if (mode === "online") {
+    dot.className = "dot";
+    txt.textContent = "Conectado";
+    badge.classList.add("hidden");
+  } else if (mode === "cache") {
+    dot.className = "dot cache";
+    txt.textContent = "Modo sin conexion";
+    badge.classList.remove("hidden");
+  } else {
+    dot.className = "dot off";
+    txt.textContent = "Sin conexion";
+    badge.classList.add("hidden");
+  }
+}
+
 // ==================== PERFIL ====================
 
 async function loadProfile() {
   try {
     const res = await fetch(`${API()}/api/profile`);
+    if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    if (data.success) {
-      const p = data.data;
-      document.getElementById("profileFields").innerHTML = [
-        ["Nombre",       `${p.nombre} ${p.apellido}`],
-        ["Email",        p.email],
-        ["Telefono",     p.telefono],
-        ["Titulo",       p.titulo_profesional],
-        ["Ubicacion",    p.ubicacion],
-        ["LinkedIn",     p.linkedin],
-        ["Portfolio",    p.portfolio],
-        ["GitHub",       p.github],
-        ["Experiencia",  p.experiencia],
-        ["Educacion",    p.educacion],
-        ["Salario esp.", p.salario],
-        ["Disponib.",    p.disponibilidad],
-        ["Resumen",      p.resumen],
-        ["Habilidades",  Array.isArray(p.habilidades) ? p.habilidades.join(", ") : p.habilidades],
-      ]
-      .filter(([, v]) => v)
-      .map(([l, v]) => `<div class="row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`)
-      .join("");
-
-      document.getElementById("dot").className = "dot";
-      document.getElementById("statusTxt").textContent = "Conectado";
-    }
+    if (!data.success) throw new Error("API error");
+    const p = data.data;
+    await saveCachedProfile(p);
+    renderProfileData(p);
+    setConnectionStatus("online");
   } catch {
-    document.getElementById("dot").className = "dot off";
-    document.getElementById("statusTxt").textContent = "Sin conexion";
-    document.getElementById("profileFields").innerHTML =
-      '<p style="font-size:11px;color:#ef4444;">No se pudo conectar</p>';
+    const cached = await loadCachedProfile();
+    if (cached) {
+      renderProfileData(cached);
+      setConnectionStatus("cache");
+      addLog("Perfil en cache (modo sin conexion)");
+    } else {
+      setConnectionStatus("error");
+      document.getElementById("profileFields").innerHTML =
+        '<p style="font-size:11px;color:#ef4444;">No se pudo conectar</p>';
+    }
   }
 }
 
@@ -450,8 +573,8 @@ async function handlePreview() {
     }
 
     const fields = result?.fields || [];
-    const res = await fetch(`${API()}/api/profile`);
-    const profile = (await res.json()).data;
+    const profile = await fetchProfile();
+    if (!profile) { addLog("Sin perfil disponible"); return; }
     const mapping = buildMapping(profile);
     const matched = {};
     fields.forEach(f => {
@@ -511,8 +634,12 @@ async function handleAutofill() {
     }
 
     console.log("[SmartApply] Campos detectados en la pagina:", fields.map(f => f.name));
-    const res = await fetch(`${API()}/api/profile`);
-    const profile = (await res.json()).data;
+    const profile = await fetchProfile();
+    if (!profile) {
+      addLog("Sin perfil disponible (sin conexion y sin cache)");
+      document.getElementById("statusTxt").textContent = "Sin perfil disponible";
+      return;
+    }
     const mapping = buildMapping(profile);
     const matched = {};
 
@@ -584,13 +711,10 @@ async function confirmAndFill() {
   const data = {};
   inputs.forEach(input => { data[input.dataset.field] = input.value; });
 
-  try {
-    const res = await fetch(`${API()}/api/profile`);
-    const profile = (await res.json()).data;
+  const profile = await fetchProfile();
+  if (profile) {
     data.nombre   = profile.nombre;
     data.apellido = profile.apellido;
-  } catch (err) {
-    console.error("Error obtener perfil:", err);
   }
 
   try {

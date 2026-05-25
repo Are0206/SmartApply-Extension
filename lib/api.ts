@@ -11,7 +11,8 @@ export interface ApiResponse<T = unknown> {
   error?: string
 }
 
-export interface UserProfile extends Record<string, unknown> {
+export interface UserProfile {
+  id: string
   nombre: string
   apellido: string
   email: string
@@ -20,6 +21,7 @@ export interface UserProfile extends Record<string, unknown> {
   ubicacion: string
   linkedin: string
   resumen?: string
+  [key: string]: unknown
 }
 
 export interface ActionLog {
@@ -27,6 +29,7 @@ export interface ActionLog {
   action: string
   details: string
   fields: string[]
+  url?: string
   status: "completado" | "previsualizado" | "cancelado"
   timestamp?: string
 }

@@ -1,0 +1,40 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id                 String   @id @default(cuid())
+  nombre             String   @default("")
+  apellido           String   @default("")
+  email              String   @default("")
+  telefono           String   @default("")
+  linkedin           String   @default("")
+  portfolio          String   @default("")
+  ubicacion          String   @default("")
+  titulo_profesional String   @default("")
+  resumen            String   @default("")
+  experiencia        String   @default("")
+  educacion          String   @default("")
+  habilidades        String   @default("[]")
+  github             String   @default("")
+  salario            String   @default("")
+  disponibilidad     String   @default("")
+  isActive           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model ActionLog {
+  id        String   @id @default(cuid())
+  action    String
+  details   String
+  fields    String   @default("[]")
+  url       String   @default("desconocido")
+  status    String   @default("completado")
+  timestamp DateTime @default(now())
+}

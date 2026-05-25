@@ -38,6 +38,14 @@
     .lock-screen p { font-size: 11px; color: #94a3b8; margin-bottom: 10px; }
     .session-error { font-size: 11px; color: #ef4444; min-height: 14px; margin-top: 4px; }
     .hidden { display: none !important; }
+    .btn-sync { background: transparent; border: 1px solid #334155; border-radius: 4px; color: #94a3b8; font-size: 10px; padding: 3px 8px; cursor: pointer; transition: color 0.2s, border-color 0.2s; }
+    .btn-sync:hover { color: #38bdf8; border-color: #38bdf8; }
+    .btn-sync:disabled { opacity: 0.5; cursor: not-allowed; }
+    .sync-msg { font-size: 11px; padding: 5px 10px; border-radius: 4px; margin-bottom: 8px; text-align: center; }
+    .sync-msg.ok  { color: #4ade80; background: #052e16; border: 1px solid #166534; }
+    .sync-msg.err { color: #f87171; background: #450a0a; border: 1px solid #991b1b; }
+    .dot.cache { background: #f59e0b; }
+    .offline-badge { font-size: 10px; color: #f59e0b; background: #1c1008; border: 1px solid #78350f; border-radius: 4px; padding: 4px 8px; margin-bottom: 8px; text-align: center; }
   </style>
 </head>
 <body>
@@ -55,10 +63,15 @@
   </div>
 
   <div class="content" id="mainApp">
-    <div class="status">
-      <div class="dot" id="dot"></div>
-      <span id="statusTxt">Conectando...</span>
+    <div class="status" style="justify-content:space-between;">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="dot" id="dot"></div>
+        <span id="statusTxt">Conectando...</span>
+      </div>
+      <button id="syncBtn" class="btn-sync">&#8635; Sincronizar</button>
     </div>
+    <div id="syncMsg" class="sync-msg hidden"></div>
+    <div id="offlineBadge" class="offline-badge hidden">Datos en cache &mdash; Sincroniza para actualizar</div>
 
     <div class="toggle-container">
       <span class="toggle-label">Autocompletado</span>

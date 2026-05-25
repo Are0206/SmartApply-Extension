@@ -129,6 +129,24 @@ export function updateProfile(data: Partial<UserProfile>): UserProfile {
   return getProfile()
 }
 
+/**
+ * Actualiza un perfil por ID (HU-06)
+ * Retorna el perfil actualizado o null si no existe
+ */
+export function updateProfileById(id: string, data: Partial<UserProfile>): UserProfile | null {
+  let found = false
+  profiles = profiles.map((p) => {
+    if (p.id === id) {
+      found = true
+      return { ...p, ...data, id: p.id, updatedAt: new Date().toISOString() }
+    }
+    return p
+  })
+  if (!found) return null
+  const updated = profiles.find((p) => p.id === id)!
+  return { ...updated }
+}
+
 /** Elimina un perfil por ID; no permite eliminar el último (HU-10) */
 export function deleteProfile(id: string): boolean {
   if (profiles.length <= 1) return false

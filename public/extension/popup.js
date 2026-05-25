@@ -61,6 +61,19 @@ function setupEventListeners() {
   document.getElementById("masterPassword").addEventListener("keydown", (e) => {
     if (e.key === "Enter") handleUnlock();
   });
+  // Edit / Delete buttons in the popup
+  const editBtn = document.getElementById("editBtn");
+  const deleteBtn = document.getElementById("deleteBtn");
+  const saveEditBtn = document.getElementById("saveEditBtn");
+  const cancelEditBtn = document.getElementById("cancelEditBtn");
+  if (editBtn) editBtn.addEventListener("click", openEditForm);
+  if (deleteBtn) deleteBtn.addEventListener("click", handleDeleteProfile);
+  const newBtn = document.getElementById("newProfileBtn");
+  if (newBtn) newBtn.addEventListener("click", createNewProfile);
+  if (saveEditBtn) saveEditBtn.addEventListener("click", saveProfileEdit);
+  if (cancelEditBtn) cancelEditBtn.addEventListener("click", () => {
+    document.getElementById("editCard").style.display = "none";
+  });
 }
 
 // ==================== SESION / SEGURIDAD (HU-14) ====================
@@ -196,6 +209,134 @@ async function loadProfileSelector() {
     });
   } catch (err) {
     console.error("Error cargando selector de perfiles:", err);
+  }
+}
+
+// ==================== EDIT / DELETE PROFILE ====================
+
+async function openEditForm() {
+  const select = document.getElementById("profileSelect");
+  if (!select) return;
+  const id = select.value;
+  try {
+    // Fetch list and find locally to avoid issues with dynamic route mismatch
+    const res = await fetch(`${API()}/api/profiles`);
+    const list = await res.json();
+    if (!list.success) return addLog("No se pudieron obtener perfiles");
+    const p = (list.data || []).find(x => x.id === id);
+    if (!p) return addLog("Perfil no encontrado para editar");
+    const container = document.getElementById("editFields");
+    container.innerHTML = [
+      ["nombre", "Nombre", p.nombre],
+      ["apellido", "Apellido", p.apellido],
+      ["email", "Email", p.email],
+      ["telefono", "Telefono", p.telefono],
+      ["titulo_profesional", "Titulo", p.titulo_profesional]
+    ].map(([key, label, value]) =>
+      `<div class=\"row\" style=\"align-items:center;gap:8px;\"><span class=\"lbl\">${label}</span><input data-key=\"${key}\" class=\"session-input\" value=\"${(value||"").replace(/\"/g,'&quot;')}\" /></div>`
+    ).join("");
+    document.getElementById("editCard").style.display = "block";
+    document.getElementById("editCard").scrollIntoView({ behavior: "smooth", block: "end" });
+  } catch (err) {
+    addLog("Error al abrir formulario de edicion: " + err.message);
+  }
+}
+
+async function saveProfileEdit() {
+  const select = document.getElementById("profileSelect");
+  if (!select) return;
+  const id = select.value;
+  const inputs = document.querySelectorAll('#editFields [data-key]');
+  const payload = {};
+  inputs.forEach(inp => { payload[inp.dataset.key] = inp.value; });
+  try {
+    // Use fallback POST /api/profiles/update to avoid dynamic route issues
+    const res = await fetch(`${API()}/api/profiles/update`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...payload })
+    });
+    const data = await res.json();
+    if (data.success) {
+      addLog("Perfil actualizado");
+      document.getElementById("editCard").style.display = "none";
+      await loadProfileSelector();
+      await loadProfile();
+    } else {
+      addLog("No se pudo actualizar el perfil");
+    }
+  } catch (err) {
+    addLog("Error al guardar perfil: " + err.message);
+    // Fallback: aplicar cambio localmente en el selector para mostrar al usuario el efecto
+    try {
+      const select = document.getElementById("profileSelect");
+      const option = select.querySelector(`option[value="${id}"]`);
+      if (option) {
+        // actualizar texto de la opción con nuevo nombre si existe
+        const nombre = payload.nombre || option.textContent.split(' — ')[0] || 'Perfil';
+        option.textContent = `${nombre} — (local)`;
+      }
+      document.getElementById("editCard").style.display = "none";
+      await loadProfileSelector();
+      await loadProfile();
+    } catch (e) {}
+  }
+}
+
+// Crear nuevo perfil (UI + POST al backend). Si falla el POST, crea un perfil temporal en el selector.
+async function createNewProfile() {
+  const nombre = prompt("Nombre para el nuevo perfil:", "Nuevo");
+  if (nombre === null) return;
+  const payload = { nombre, apellido: "", email: "", telefono: "", titulo_profesional: "" };
+  try {
+    const res = await fetch(`${API()}/api/profiles`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.success && data.data) {
+      addLog("Perfil creado");
+      await loadProfileSelector();
+      const select = document.getElementById("profileSelect");
+      select.value = data.data.id;
+      await loadProfile();
+      return;
+    }
+    throw new Error(data.message || 'Error desconocido');
+  } catch (err) {
+    addLog("No se pudo crear en el backend, creando localmente.");
+    // Fallback local: agregar opción temporal
+    try {
+      const id = `local_${String(Date.now()).slice(-6)}`;
+      const select = document.getElementById("profileSelect");
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = `${nombre} — (local)`;
+      select.appendChild(opt);
+      select.value = id;
+      await loadProfile();
+    } catch (e) { console.error(e); }
+  }
+}
+
+async function handleDeleteProfile() {
+  const select = document.getElementById("profileSelect");
+  if (!select) return;
+  const id = select.value;
+  if (!confirm("Eliminar este perfil? Esta accion no se puede deshacer.")) return;
+  try {
+    const res = await fetch(`${API()}/api/profiles/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.success) {
+      addLog("Perfil eliminado");
+      await loadProfileSelector();
+      await loadProfile();
+    } else {
+      addLog("No se pudo eliminar el perfil: " + (data.message || ""));
+    }
+  } catch (err) {
+    addLog("Error al eliminar perfil: " + err.message);
   }
 }
 

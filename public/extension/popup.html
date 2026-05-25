@@ -81,6 +81,21 @@
       <div id="profileFields"><p style="font-size:11px;color:#94a3b8;">Cargando...</p></div>
     </div>
 
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button class="btn btn-prev" id="editBtn">Editar perfil</button>
+      <button class="btn btn-prev" id="deleteBtn">Eliminar perfil</button>
+      <button class="btn btn-prev" id="newProfileBtn">+ Nuevo perfil</button>
+    </div>
+
+    <div class="card" id="editCard" style="display:none;">
+      <h3>Editar perfil</h3>
+      <div id="editFields"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="btn btn-fill" id="saveEditBtn">Guardar cambios</button>
+        <button class="btn btn-prev" id="cancelEditBtn">Cancelar</button>
+      </div>
+    </div>
+
     <button class="btn btn-prev" id="previewBtn">Previsualizar</button>
     <button class="btn btn-fill" id="autofillBtn">Autocompletar</button>
 
